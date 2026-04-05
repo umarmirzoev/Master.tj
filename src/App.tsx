@@ -32,6 +32,16 @@ import ShopCategory from "./pages/ShopCategory";
 import ProductDetail from "./pages/ProductDetail";
 import CartPage from "./pages/Cart";
 import MasterStore from "./pages/MasterStore";
+import ShopOrders from "./pages/ShopOrders";
+import ShopThankYou from "./pages/ShopThankYou";
+import ShopOrderDetail from "./pages/ShopOrderDetail";
+import ShopPromotions from "./pages/ShopPromotions";
+import ShopBrands from "./pages/ShopBrands";
+import ShopCompare from "./pages/ShopCompare";
+import ShopSearch from "./pages/ShopSearch";
+import ShopFavorites from "./pages/ShopFavorites";
+import ShopReviews from "./pages/ShopReviews";
+import { FavoritesProvider } from "@/components/favorites/FavoritesSection";
 
 const queryClient = new QueryClient();
 
@@ -67,9 +77,18 @@ const AnimatedRoutes = () => {
         <Route path="/verify-email" element={<PageTransition><VerifyEmail /></PageTransition>} />
         <Route path="/pending-approval" element={<PageTransition><PendingApproval /></PageTransition>} />
         <Route path="/shop" element={<PageTransition><Shop /></PageTransition>} />
+        <Route path="/shop/promotions" element={<PageTransition><ShopPromotions /></PageTransition>} />
+        <Route path="/shop/brands" element={<PageTransition><ShopBrands /></PageTransition>} />
+        <Route path="/shop/compare" element={<PageTransition><ShopCompare /></PageTransition>} />
+        <Route path="/shop/search" element={<PageTransition><ShopSearch /></PageTransition>} />
+        <Route path="/shop/favorites" element={<PageTransition><ShopFavorites /></PageTransition>} />
+        <Route path="/shop/reviews" element={<PageTransition><ShopReviews /></PageTransition>} />
         <Route path="/shop/category/:id" element={<PageTransition><ShopCategory /></PageTransition>} />
         <Route path="/shop/product/:id" element={<PageTransition><ProductDetail /></PageTransition>} />
         <Route path="/cart" element={<PageTransition><CartPage /></PageTransition>} />
+        <Route path="/shop/orders" element={<PageTransition><ShopOrders /></PageTransition>} />
+        <Route path="/shop/orders/:id" element={<PageTransition><ShopOrderDetail /></PageTransition>} />
+        <Route path="/shop/thank-you/:id" element={<PageTransition><ShopThankYou /></PageTransition>} />
         <Route path="/master-store/:masterId" element={<PageTransition><MasterStore /></PageTransition>} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/dashboard/*" element={<Dashboard />} />
@@ -89,15 +108,17 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <LanguageProvider>
       <AuthProvider>
-        <CartProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <AnimatedRoutes />
-            </BrowserRouter>
-          </TooltipProvider>
-        </CartProvider>
+        <FavoritesProvider>
+          <CartProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <BrowserRouter>
+                <AnimatedRoutes />
+              </BrowserRouter>
+            </TooltipProvider>
+          </CartProvider>
+        </FavoritesProvider>
       </AuthProvider>
     </LanguageProvider>
   </QueryClientProvider>

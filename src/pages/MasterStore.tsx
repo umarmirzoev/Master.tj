@@ -11,6 +11,7 @@ import { motion } from "framer-motion";
 import {
   Package, Star, User, ShoppingCart, Briefcase, CheckCircle, MapPin,
 } from "lucide-react";
+import { SmartProductImage } from "@/components/shop/SmartProductImage";
 
 // Страница магазина мастера показывает его профиль и все опубликованные товары.
 export default function MasterStore() {
@@ -101,7 +102,7 @@ export default function MasterStore() {
               return (
                 <Card key={p.id} className="group hover:shadow-lg transition-all hover:-translate-y-1 overflow-hidden border-border">
                   <div className="relative aspect-square bg-muted/30 flex items-center justify-center p-4">
-                    {p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-contain" /> : <Package className="w-16 h-16 text-muted-foreground/30" />}
+                    <SmartProductImage product={p} alt={p.name} className="w-full h-full object-contain" />
                     {discount > 0 && <Badge className="absolute top-2 left-2 bg-red-500 text-white">-{discount}%</Badge>}
                     <Badge className="absolute top-2 right-2 bg-emerald-500 text-white text-[10px]">От мастера</Badge>
                   </div>

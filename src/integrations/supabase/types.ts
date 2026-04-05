@@ -859,15 +859,57 @@ export type Database = {
           },
         ]
       }
+      shop_order_status_history: {
+        Row: {
+          changed_by: string | null
+          created_at: string
+          id: string
+          note: string | null
+          order_id: string
+          status: string
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          order_id: string
+          status: string
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          order_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_order_status_history_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "shop_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shop_orders: {
         Row: {
           comments: string | null
           created_at: string
           customer_name: string | null
           delivery_address: string | null
+          discount_amount: number
           id: string
+          paid_at: string | null
+          payment_method: string | null
+          payment_status: string
           phone: string | null
+          promo_code: string | null
+          promo_code_id: string | null
           status: string
+          subtotal: number
           total: number
           updated_at: string
           user_id: string
@@ -877,9 +919,16 @@ export type Database = {
           created_at?: string
           customer_name?: string | null
           delivery_address?: string | null
+          discount_amount?: number
           id?: string
+          paid_at?: string | null
+          payment_method?: string | null
+          payment_status?: string
           phone?: string | null
+          promo_code?: string | null
+          promo_code_id?: string | null
           status?: string
+          subtotal?: number
           total?: number
           updated_at?: string
           user_id: string
@@ -889,14 +938,29 @@ export type Database = {
           created_at?: string
           customer_name?: string | null
           delivery_address?: string | null
+          discount_amount?: number
           id?: string
+          paid_at?: string | null
+          payment_method?: string | null
+          payment_status?: string
           phone?: string | null
+          promo_code?: string | null
+          promo_code_id?: string | null
           status?: string
+          subtotal?: number
           total?: number
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "shop_orders_promo_code_id_fkey"
+            columns: ["promo_code_id"]
+            isOneToOne: false
+            referencedRelation: "promo_codes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       shop_products: {
         Row: {

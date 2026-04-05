@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Star, Award, TrendingUp, ArrowRight, Clock, MapPin, Package } from "lucide-react";
+import { SmartProductImage } from "@/components/shop/SmartProductImage";
 
 // Эти секции выводят рейтинговые подборки мастеров и товаров для главной страницы.
 export function TopMastersWeek() {
@@ -146,11 +147,7 @@ export function TopProducts() {
               <Link to={`/shop/product/${p.id}`}>
                 <Card className="group glass-card border-border/40 rounded-2xl overflow-hidden hover:border-primary/20">
                   <div className="aspect-square bg-muted overflow-hidden rounded-t-2xl">
-                    {p.image_url ? (
-                      <img src={p.image_url} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center"><Package className="w-10 h-10 text-muted-foreground" /></div>
-                    )}
+                    <SmartProductImage product={p} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   </div>
                   <CardContent className="p-4">
                     <p className="text-sm font-semibold text-foreground truncate group-hover:text-primary transition-colors">{p.name}</p>

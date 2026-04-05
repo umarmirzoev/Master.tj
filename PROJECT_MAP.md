@@ -352,6 +352,9 @@ Edge functions на Deno.
 - `ai-match-master/index.ts`
   AI-функция для анализа описания проблемы и подбора мастера.
 
+- `get-products/index.ts`
+  API для получения товаров с фильтрами, пагинацией и поиском.
+
 - `seed-demo-accounts/index.ts`
   Создание/обновление демо-аккаунтов для тестирования.
 

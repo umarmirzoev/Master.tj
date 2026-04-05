@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useCart } from "@/hooks/useCart";
 import { useRecentlyViewed, RecentProduct } from "@/hooks/useRecentlyViewed";
-import { ShoppingCart, Star, Package, ArrowRight, Clock } from "lucide-react";
+import { SmartProductImage } from "@/components/shop/SmartProductImage";
+import { FavoriteButton } from "@/components/favorites/FavoritesSection";
+import { ShoppingCart, Star, Package, ArrowRight, Clock, MessageCircle } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface Props {
@@ -46,15 +48,15 @@ export default function RecentlyViewedProducts({ excludeId }: Props) {
 
 function RecentCard({ product: p, onAdd, t }: { product: RecentProduct; onAdd: (id: string) => void; t: (k: string) => string }) {
   const discount = p.old_price ? Math.round((1 - p.price / p.old_price) * 100) : 0;
+  const quickLink = `https://wa.me/992979117007?text=${encodeURIComponent(`Здравствуйте! Интересует товар: ${p.name}`)}`;
   return (
     <Card className="hover:shadow-lg transition-all overflow-hidden border-border group shrink-0 w-[180px] sm:w-auto">
       <Link to={`/shop/product/${p.id}`}>
         <div className="aspect-square bg-muted/20 flex items-center justify-center overflow-hidden relative">
-          {p.image_url ? (
-            <img src={p.image_url} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-          ) : (
-            <Package className="w-12 h-12 text-muted-foreground/30" />
-          )}
+          <SmartProductImage product={p} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          <div className="absolute top-2 right-2 z-10">
+            <FavoriteButton itemType="product" itemId={p.id} size="sm" />
+          </div>
           {discount > 0 && (
             <span className="absolute top-2 left-2 bg-destructive text-destructive-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-full">-{discount}%</span>
           )}
@@ -79,11 +81,11 @@ function RecentCard({ product: p, onAdd, t }: { product: RecentProduct; onAdd: (
           <Button size="sm" className="flex-1 rounded-full text-xs h-8 gap-1" onClick={(e) => { e.preventDefault(); onAdd(p.id); }}>
             <ShoppingCart className="w-3 h-3" /> {t("shopAddToCart")}
           </Button>
-          <Link to={`/shop/product/${p.id}`}>
+          <a href={quickLink} target="_blank" rel="noreferrer">
             <Button size="sm" variant="outline" className="rounded-full text-xs h-8 px-2.5">
-              <ArrowRight className="w-3 h-3" />
+              <MessageCircle className="w-3 h-3" />
             </Button>
-          </Link>
+          </a>
         </div>
       </CardContent>
     </Card>

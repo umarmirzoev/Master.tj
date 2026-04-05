@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Heart, Star, MapPin, Trash2, ExternalLink, Package, Wrench } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { SmartProductImage } from "@/components/shop/SmartProductImage";
 
 interface FavoriteItem {
   id: string;
@@ -226,7 +227,7 @@ export default function FavoritesSection() {
                 <Card key={fav.id} className="group hover:shadow-md transition-all">
                   <CardContent className="p-4 flex items-center gap-3">
                     <div className="w-12 h-12 rounded-xl bg-muted overflow-hidden shrink-0">
-                      {p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" /> : <Package className="w-6 h-6 text-muted-foreground m-3" />}
+                      <SmartProductImage product={p} alt={p.name} className="w-full h-full object-cover" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <Link to={`/shop/product/${p.id}`} className="font-semibold text-foreground hover:text-primary transition-colors truncate block">{p.name}</Link>

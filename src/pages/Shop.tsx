@@ -8,16 +8,27 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Slider } from "@/components/ui/slider";
+import { FavoriteButton } from "@/components/favorites/FavoritesSection";
+import { useProductComparison } from "@/hooks/useProductComparison";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useCart } from "@/hooks/useCart";
-import RecentlyViewedProducts from "@/components/shop/RecentlyViewedProducts";
-import RecommendedProducts from "@/components/shop/RecommendedProducts";
+import { SmartProductImage } from "@/components/shop/SmartProductImage";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { fallbackShopCategories, fallbackShopProducts, isFallbackProductId } from "@/data/shopFallback";
 import { motion } from "framer-motion";
 import {
   ShoppingCart, Star, Phone, Zap, Droplets, Lightbulb, Wrench,
   Camera, Lock, Tv, PaintBucket, PlugZap, Package, ArrowRight,
   Percent, TrendingUp, Shield, Truck, Headphones,
-  ChevronLeft, ChevronRight, Sparkles, Award, Search, X, Clock,
+  ChevronLeft, ChevronRight, Sparkles, Award, Search, X, Clock, Scale, Building2,
 } from "lucide-react";
 
 const ICON_MAP: Record<string, any> = {
@@ -57,42 +68,69 @@ export default function Shop() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [sortBy, setSortBy] = useState("popular");
+  const [inStockOnly, setInStockOnly] = useState(false);
+  const [discountOnly, setDiscountOnly] = useState(false);
+  const [installOnly, setInstallOnly] = useState(false);
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 1000]);
   const [recentSearches, setRecentSearches] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem("mc_recent_searches") || "[]"); } catch { return []; }
   });
   const { addToCart, itemCount } = useCart();
+  const { compareIds } = useProductComparison();
   const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Загружаем категории, все товары и отдельные подборки для витрины магазина.
     const load = async () => {
-      const [catsRes, popRes, discRes, recRes, allRes, hotRes] = await Promise.all([
-        supabase.from("shop_categories").select("*").order("sort_order"),
-        supabase.from("shop_products").select("*, shop_categories(name)").eq("is_popular", true).eq("is_approved", true).limit(12),
-        supabase.from("shop_products").select("*, shop_categories(name)").eq("is_discounted", true).eq("is_approved", true).limit(8),
-        supabase.from("shop_products").select("*, shop_categories(name)").eq("is_approved", true).gte("rating", 4.5).order("reviews_count", { ascending: false }).limit(8),
-        supabase.from("shop_products").select("*, shop_categories(name)").eq("is_approved", true).order("created_at", { ascending: false }).limit(200),
-        supabase.from("shop_products").select("*, shop_categories(name)").eq("is_discounted", true).eq("is_approved", true).not("promotion_end", "is", null).gte("promotion_end", new Date().toISOString()).order("promotion_end").limit(6),
-      ]);
-      const cats = catsRes.data || [];
-      setCategories(cats);
-      setPopular(popRes.data || []);
-      setDiscounted(discRes.data || []);
-      setHotDeals(hotRes.data || []);
-      setRecommended(recRes.data || []);
-      const all = allRes.data || [];
-      setAllProducts(all);
-      const grouped: Record<string, any[]> = {};
-      for (const cat of cats.slice(0, 4)) {
-        const items = all.filter((p: any) => p.category_id === cat.id).slice(0, 10);
-        if (items.length > 0) grouped[cat.name] = items;
+      try {
+        const [catsRes, popRes, discRes, recRes, allRes, hotRes] = await Promise.all([
+          supabase.from("shop_categories").select("*").order("sort_order"),
+          supabase.from("shop_products").select("*, shop_categories(name)").eq("is_popular", true).eq("is_approved", true).limit(12),
+          supabase.from("shop_products").select("*, shop_categories(name)").eq("is_discounted", true).eq("is_approved", true).limit(8),
+          supabase.from("shop_products").select("*, shop_categories(name)").eq("is_approved", true).gte("rating", 4.5).order("reviews_count", { ascending: false }).limit(8),
+          supabase.from("shop_products").select("*, shop_categories(name)").eq("is_approved", true).order("created_at", { ascending: false }).limit(200),
+          supabase.from("shop_products").select("*, shop_categories(name)").eq("is_discounted", true).eq("is_approved", true).not("promotion_end", "is", null).gte("promotion_end", new Date().toISOString()).order("promotion_end").limit(6),
+        ]);
+
+        const shouldUseFallback = (catsRes.data?.length || 0) === 0 || (allRes.data?.length || 0) === 0;
+        const cats = shouldUseFallback ? fallbackShopCategories : (catsRes.data || []);
+        const all = shouldUseFallback ? fallbackShopProducts : (allRes.data || []);
+
+        setCategories(cats);
+        setPopular(shouldUseFallback ? all.filter((p: any) => p.is_popular).slice(0, 12) : (popRes.data || []));
+        setDiscounted(shouldUseFallback ? all.filter((p: any) => p.is_discounted).slice(0, 8) : (discRes.data || []));
+        setHotDeals(shouldUseFallback ? all.filter((p: any) => p.promotion_end).slice(0, 6) : (hotRes.data || []));
+        setRecommended(
+          shouldUseFallback
+            ? [...all].sort((a: any, b: any) => (b.reviews_count || 0) - (a.reviews_count || 0)).slice(0, 8)
+            : (recRes.data || [])
+        );
+        setAllProducts(all);
+
+        const grouped: Record<string, any[]> = {};
+        for (const cat of cats.slice(0, 4)) {
+          const items = all.filter((p: any) => p.category_id === cat.id).slice(0, 10);
+          if (items.length > 0) grouped[cat.name] = items;
+        }
+        setByCategory(grouped);
+        setInstallProduct(all.find((p: any) => p.installation_price && p.image_url) || null);
+      } finally {
+        setLoading(false);
       }
-      setByCategory(grouped);
-      setInstallProduct(all.find((p: any) => p.installation_price && p.image_url) || null);
-      setLoading(false);
     };
     load();
   }, []);
+
+  useEffect(() => {
+    if (allProducts.length === 0) return;
+    const prices = allProducts
+      .map((product) => Number(product.price) || 0)
+      .filter((price) => price > 0);
+    const maxPrice = prices.length > 0 ? Math.max(...prices) : 1000;
+    setPriceRange([0, maxPrice]);
+  }, [allProducts]);
 
   // Умный поиск расширяет запрос ключевыми словами по типовым бытовым проблемам.
   const searchResults = useMemo(() => {
@@ -128,6 +166,51 @@ export default function Shop() {
   };
 
   const isSearchActive = searchQuery.trim().length > 0;
+  const maxAvailablePrice = useMemo(() => {
+    const prices = allProducts
+      .map((product) => Number(product.price) || 0)
+      .filter((price) => price > 0);
+    return prices.length > 0 ? Math.max(...prices) : 1000;
+  }, [allProducts]);
+  const categoryProductCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const product of allProducts) {
+      counts[product.category_id] = (counts[product.category_id] || 0) + 1;
+    }
+    return counts;
+  }, [allProducts]);
+
+  const filteredProducts = useMemo(() => {
+    const normalized = [...allProducts].filter((product) => {
+      const price = Number(product.price) || 0;
+      if (selectedCategory !== "all" && product.category_id !== selectedCategory) return false;
+      if (inStockOnly && !product.in_stock) return false;
+      if (discountOnly && !product.old_price) return false;
+      if (installOnly && !product.installation_price) return false;
+      if (price < priceRange[0] || price > priceRange[1]) return false;
+      return true;
+    });
+
+    normalized.sort((a, b) => {
+      if (sortBy === "price-asc") return (Number(a.price) || 0) - (Number(b.price) || 0);
+      if (sortBy === "price-desc") return (Number(b.price) || 0) - (Number(a.price) || 0);
+      if (sortBy === "new") return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      if (sortBy === "rating") return (Number(b.rating) || 0) - (Number(a.rating) || 0);
+      return ((Number(b.reviews_count) || 0) + ((b.is_popular || b.is_discounted) ? 25 : 0))
+        - ((Number(a.reviews_count) || 0) + ((a.is_popular || a.is_discounted) ? 25 : 0));
+    });
+
+    return normalized;
+  }, [allProducts, selectedCategory, inStockOnly, discountOnly, installOnly, priceRange, sortBy]);
+
+  const resetFilters = () => {
+    setSelectedCategory("all");
+    setSortBy("popular");
+    setInStockOnly(false);
+    setDiscountOnly(false);
+    setInstallOnly(false);
+    setPriceRange([0, maxAvailablePrice]);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -213,11 +296,46 @@ export default function Shop() {
                     <Wrench className="w-4 h-4" /> {t("shopFindMaster")}
                   </Button>
                 </Link>
+                <Link to="/shop/promotions">
+                  <Button size="lg" variant="outline" className="rounded-full gap-2 px-8 h-12 text-base">
+                    <Percent className="w-4 h-4" /> Акции
+                  </Button>
+                </Link>
               </div>
               <div className="flex items-center gap-6 mt-10 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1.5"><Package className="w-4 h-4 text-primary" /> 96+ {t("shopProducts")}</span>
-                <span className="flex items-center gap-1.5"><Star className="w-4 h-4 text-amber-500" /> 12 {t("shopCategories")}</span>
+                <span className="flex items-center gap-1.5"><Package className="w-4 h-4 text-primary" /> {allProducts.length || 0} {t("shopProducts")}</span>
+                <span className="flex items-center gap-1.5"><Star className="w-4 h-4 text-amber-500" /> {categories.length || 0} {t("shopCategories")}</span>
                 <span className="flex items-center gap-1.5"><Truck className="w-4 h-4 text-primary" /> {t("shopDelivery")}</span>
+              </div>
+
+              <div className="mt-8 grid gap-3 sm:grid-cols-3 max-w-3xl">
+                <Link to="/shop/promotions" className="rounded-2xl border border-border bg-background/80 p-4 backdrop-blur-sm hover:border-primary/40 hover:shadow-lg transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-xl bg-destructive/10 p-2"><Percent className="w-4 h-4 text-destructive" /></div>
+                    <div>
+                      <p className="font-semibold text-foreground">Акции</p>
+                      <p className="text-xs text-muted-foreground">Скидки, горячие предложения и промокоды</p>
+                    </div>
+                  </div>
+                </Link>
+                <Link to="/shop/brands" className="rounded-2xl border border-border bg-background/80 p-4 backdrop-blur-sm hover:border-primary/40 hover:shadow-lg transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-xl bg-primary/10 p-2"><Building2 className="w-4 h-4 text-primary" /></div>
+                    <div>
+                      <p className="font-semibold text-foreground">Бренды</p>
+                      <p className="text-xs text-muted-foreground">Подборка товаров по производителям</p>
+                    </div>
+                  </div>
+                </Link>
+                <Link to="/shop/compare" className="rounded-2xl border border-border bg-background/80 p-4 backdrop-blur-sm hover:border-primary/40 hover:shadow-lg transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-xl bg-amber-500/10 p-2"><Scale className="w-4 h-4 text-amber-600" /></div>
+                    <div>
+                      <p className="font-semibold text-foreground">Сравнение</p>
+                      <p className="text-xs text-muted-foreground">Выбрано товаров: {compareIds.length}/4</p>
+                    </div>
+                  </div>
+                </Link>
               </div>
             </motion.div>
           </div>
@@ -289,6 +407,7 @@ export default function Shop() {
                                 <Icon className="w-5 h-5 text-primary group-hover:text-primary-foreground transition-colors" />
                               </div>
                               <p className="text-sm font-semibold text-foreground">{cat.name}</p>
+                              <p className="text-xs text-muted-foreground mt-1">{categoryProductCounts[cat.id] || 0} {t("shopProducts")}</p>
                             </CardContent>
                           </Card>
                         </Link>
@@ -297,6 +416,107 @@ export default function Shop() {
                   })}
                 </div>
               )}
+            </div>
+          </section>
+
+          <section className="py-8 border-t border-border bg-muted/20">
+            <div className="container px-4 mx-auto">
+              <div className="flex flex-col gap-6">
+                <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl md:text-3xl font-bold text-foreground">{t("shopAllProducts")}</h2>
+                    <p className="text-muted-foreground text-sm mt-1">
+                      {filteredProducts.length} {t("shopProductsCount")}
+                    </p>
+                  </div>
+                  <div className="w-full lg:w-64">
+                    <p className="text-sm font-medium text-foreground mb-2">{t("mastersSortBy")}</p>
+                    <Select value={sortBy} onValueChange={setSortBy}>
+                      <SelectTrigger className="rounded-xl bg-background">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="popular">{t("shopByPopularity")}</SelectItem>
+                        <SelectItem value="price-asc">{t("shopPriceAsc")}</SelectItem>
+                        <SelectItem value="price-desc">{t("shopPriceDesc")}</SelectItem>
+                        <SelectItem value="new">{t("statusNew")}</SelectItem>
+                        <SelectItem value="rating">{t("shopByRating")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <Card className="border-border shadow-sm">
+                  <CardContent className="p-5">
+                    <div className="grid gap-5 lg:grid-cols-[1.2fr_1.4fr_0.8fr_0.8fr_auto]">
+                      <div>
+                        <p className="text-sm font-medium text-foreground mb-2">{t("shopFilterCategory")}</p>
+                        <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                          <SelectTrigger className="rounded-xl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">{t("shopAllCategories")}</SelectItem>
+                            {categories.map((category) => (
+                              <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <p className="text-sm font-medium text-foreground">{t("shopPriceRange")}</p>
+                          <span className="text-xs text-muted-foreground">
+                            {priceRange[0]} - {priceRange[1]} {t("som")}
+                          </span>
+                        </div>
+                        <Slider
+                          value={priceRange}
+                          min={0}
+                          max={Math.max(maxAvailablePrice, 1)}
+                          step={5}
+                          minStepsBetweenThumbs={1}
+                          onValueChange={(value) => setPriceRange([value[0], value[1]] as [number, number])}
+                        />
+                      </div>
+
+                      <label className="flex items-center gap-3 rounded-xl border border-border px-4 py-3 bg-background cursor-pointer">
+                        <Checkbox checked={inStockOnly} onCheckedChange={(checked) => setInStockOnly(!!checked)} />
+                        <span className="text-sm font-medium text-foreground">{t("shopInStockOnly")}</span>
+                      </label>
+
+                      <label className="flex items-center gap-3 rounded-xl border border-border px-4 py-3 bg-background cursor-pointer">
+                        <Checkbox checked={discountOnly} onCheckedChange={(checked) => setDiscountOnly(!!checked)} />
+                        <span className="text-sm font-medium text-foreground">{t("shopDiscountOnly")}</span>
+                      </label>
+
+                      <label className="flex items-center gap-3 rounded-xl border border-border px-4 py-3 bg-background cursor-pointer">
+                        <Checkbox checked={installOnly} onCheckedChange={(checked) => setInstallOnly(!!checked)} />
+                        <span className="text-sm font-medium text-foreground">{t("shopMasterInstall")}</span>
+                      </label>
+
+                      <Button variant="outline" className="rounded-xl" onClick={resetFilters}>
+                        {t("shopResetFilters")}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {filteredProducts.length === 0 ? (
+                  <div className="text-center py-16 bg-background rounded-3xl border border-dashed border-border">
+                    <Package className="w-14 h-14 text-muted-foreground/30 mx-auto mb-4" />
+                    <p className="text-lg font-semibold text-foreground mb-1">{t("shopNoResults")}</p>
+                    <p className="text-sm text-muted-foreground">{t("shopNoResultsHint")}</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {filteredProducts.map((product) => (
+                      <ProductCard key={product.id} product={product} onAdd={addToCart} t={t} />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </section>
 
@@ -479,14 +699,6 @@ export default function Shop() {
               </div>
             </div>
           </section>
-        {/* Recommended Products */}
-        <div className="container px-4 mx-auto">
-          <RecommendedProducts />
-        </div>
-        {/* Recently Viewed */}
-        <div className="container px-4 mx-auto">
-          <RecentlyViewedProducts />
-        </div>
       </>
       )}
 
@@ -512,17 +724,27 @@ function HorizontalScroll({ children }: { children: React.ReactNode }) {
 }
 
 function ProductCard({ product: p, onAdd, t }: { product: any; onAdd: (id: string) => void; t: (key: string) => string }) {
+  const { toggleCompare, isComparing, compareIds, maxCompareItems } = useProductComparison();
   const discount = p.old_price ? Math.round((1 - p.price / p.old_price) * 100) : 0;
+  const canAddToCart = p.in_stock && !isFallbackProductId(p.id);
+  const stockCount = p.stock_qty ?? p.stock_quantity ?? p.quantity ?? (p.in_stock ? Math.max(3, ((p.reviews_count || 0) % 9) + 2) : 0);
+  const isNewProduct = !!p.created_at && Date.now() - new Date(p.created_at).getTime() < 1000 * 60 * 60 * 24 * 45;
+  const compareActive = isComparing(p.id);
+  const compareDisabled = !compareActive && compareIds.length >= maxCompareItems;
   return (
     <Card className="group hover:shadow-xl transition-all hover:-translate-y-1 overflow-hidden border-border h-full flex flex-col">
       <div className="relative aspect-square bg-muted/20 overflow-hidden">
-        {p.image_url ? (
-          <img src={p.image_url} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center"><Package className="w-16 h-16 text-muted-foreground/20" /></div>
-        )}
-        {discount > 0 && <Badge className="absolute top-2 left-2 bg-destructive text-destructive-foreground text-xs shadow-md">-{discount}%</Badge>}
-        {p.installation_price && <Badge className="absolute top-2 right-2 bg-primary/90 text-primary-foreground text-[10px] shadow-sm">{t("shopInstallBadge")}</Badge>}
+        <SmartProductImage product={p} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+        <div className="absolute top-2 right-2 z-10">
+          <FavoriteButton itemType="product" itemId={p.id} size="sm" />
+        </div>
+        <div className="absolute top-2 left-2 flex flex-wrap gap-1.5 max-w-[75%]">
+          {p.is_popular && <Badge className="bg-amber-500 text-white text-[10px] shadow-md">Хит</Badge>}
+          {discount > 0 && <Badge className="bg-destructive text-destructive-foreground text-[10px] shadow-md">Скидка {discount}%</Badge>}
+          {isNewProduct && <Badge className="bg-sky-500 text-white text-[10px] shadow-md">Новый</Badge>}
+          {p.promotion_label && <Badge className="bg-primary text-primary-foreground text-[10px] shadow-md">{p.promotion_label}</Badge>}
+        </div>
+        {p.installation_price && <Badge className="absolute top-2 right-2 bg-primary/90 text-primary-foreground text-[10px] shadow-sm">Установка</Badge>}
         {p.seller_type === "master" && <Badge className="absolute bottom-2 left-2 bg-primary text-primary-foreground text-[10px] gap-0.5"><Award className="w-2.5 h-2.5" /> {t("shopFromMaster")}</Badge>}
         {!p.in_stock && <div className="absolute inset-0 bg-background/60 flex items-center justify-center"><Badge variant="secondary">{t("shopOutOfStock")}</Badge></div>}
       </div>
@@ -535,6 +757,12 @@ function ProductCard({ product: p, onAdd, t }: { product: any; onAdd: (id: strin
           <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
           <span className="text-xs text-muted-foreground">{p.rating} ({p.reviews_count || 0})</span>
         </div>
+        <div className="flex items-center justify-between gap-2 mb-2 text-[11px]">
+          <span className={`font-medium ${p.in_stock ? "text-emerald-600" : "text-muted-foreground"}`}>
+            {p.in_stock ? `В наличии: ${stockCount} шт.` : t("shopOutOfStock")}
+          </span>
+          {p.installation_price && <span className="text-primary font-medium">Можно с установкой</span>}
+        </div>
         <div className="flex items-end gap-2 mb-3 mt-auto">
           <span className="text-lg font-bold text-foreground">{p.price} {t("som")}</span>
           {p.old_price && <span className="text-xs text-muted-foreground line-through">{p.old_price} {t("som")}</span>}
@@ -543,7 +771,16 @@ function ProductCard({ product: p, onAdd, t }: { product: any; onAdd: (id: strin
           <Link to={`/shop/product/${p.id}`} className="flex-1">
             <Button variant="outline" size="sm" className="w-full rounded-full text-xs h-8">{t("shopDetails")}</Button>
           </Link>
-          <Button size="sm" className="rounded-full text-xs h-8 px-3" onClick={() => onAdd(p.id)} disabled={!p.in_stock}>
+          <Button
+            variant="outline"
+            size="sm"
+            className={`rounded-full text-xs h-8 px-3 ${compareActive ? "border-primary text-primary" : ""}`}
+            onClick={() => toggleCompare(p.id)}
+            disabled={compareDisabled}
+          >
+            <Scale className="w-3 h-3" />
+          </Button>
+          <Button size="sm" className="rounded-full text-xs h-8 px-3" onClick={() => onAdd(p.id)} disabled={!canAddToCart}>
             <ShoppingCart className="w-3 h-3" />
           </Button>
         </div>

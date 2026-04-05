@@ -9,3 +9,6 @@ verify_jwt = false
 
 [functions.ai-match-master]
 verify_jwt = false
+
+[functions.get-products]
+verify_jwt = false
