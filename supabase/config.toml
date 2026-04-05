@@ -1,0 +1,11 @@
+## Конфигурация Supabase для локальных функций и параметров проекта.
+project_id = "btcaowicyxjzfyawjfwp"
+
+[functions.seed-demo-accounts]
+verify_jwt = false
+
+[functions.seed-demo-data]
+verify_jwt = false
+
+[functions.ai-match-master]
+verify_jwt = false
