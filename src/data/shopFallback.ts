@@ -66,9 +66,13 @@ const categoryOrder: string[] = [];
 const rawProducts: Array<{ category: string; id: string; name: string; image_url: string; images: string[] }> = [];
 
 for (const line of shopSeedSql.split(/\r?\n/)) {
-  const categoryMatch = line.match(/^-- (.+?) \(.+\)$/);
+  // Matches both "-- CATEGORY (Name)" and "-- ===================\n-- CATEGORY (Name)"
+  const categoryMatch = line.match(/^--\s+([^=].+?)\s+\(.+\)$/);
   if (categoryMatch) {
-    categoryOrder.push(categoryMatch[1].trim());
+    const cat = categoryMatch[1].trim();
+    if (CATEGORY_META[cat]) {
+      categoryOrder.push(cat);
+    }
     continue;
   }
 

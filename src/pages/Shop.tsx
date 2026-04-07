@@ -35,7 +35,6 @@ const ICON_MAP: Record<string, any> = {
   Zap, Droplets, Lightbulb, Wrench, Camera, Lock, Tv, PaintBucket, PlugZap, Package,
 };
 
-// Problem-based keyword map for smart search
 const PROBLEM_KEYWORDS: Record<string, string[]> = {
   "течет кран": ["смеситель", "сифон", "шланг", "сантехника", "кран"],
   "leaky faucet": ["faucet", "mixer", "plumbing"],
@@ -54,7 +53,6 @@ const PROBLEM_KEYWORDS: Record<string, string[]> = {
 
 const POPULAR_SEARCHES = ["Смеситель", "Розетка", "Камера", "Лампа", "Замок", "Кабель", "Инструменты", "Кондиционер"];
 
-// Главная страница магазина показывает категории, подборки товаров, поиск и маркетинговые блоки.
 export default function Shop() {
   const { t } = useLanguage();
   const [categories, setCategories] = useState<any[]>([]);
@@ -80,9 +78,14 @@ export default function Shop() {
   const { addToCart, itemCount } = useCart();
   const { compareIds } = useProductComparison();
   const searchRef = useRef<HTMLDivElement>(null);
+  const productsRef = useRef<HTMLElement>(null);
+
+  const handleCategoryCardClick = (catId: string) => {
+    setSelectedCategory(catId);
+    productsRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   useEffect(() => {
-    // Загружаем категории, все товары и отдельные подборки для витрины магазина.
     const load = async () => {
       try {
         const [catsRes, popRes, discRes, recRes, allRes, hotRes] = await Promise.all([
@@ -102,11 +105,7 @@ export default function Shop() {
         setPopular(shouldUseFallback ? all.filter((p: any) => p.is_popular).slice(0, 12) : (popRes.data || []));
         setDiscounted(shouldUseFallback ? all.filter((p: any) => p.is_discounted).slice(0, 8) : (discRes.data || []));
         setHotDeals(shouldUseFallback ? all.filter((p: any) => p.promotion_end).slice(0, 6) : (hotRes.data || []));
-        setRecommended(
-          shouldUseFallback
-            ? [...all].sort((a: any, b: any) => (b.reviews_count || 0) - (a.reviews_count || 0)).slice(0, 8)
-            : (recRes.data || [])
-        );
+        setRecommended(shouldUseFallback ? [...all].sort((a: any, b: any) => (b.reviews_count || 0) - (a.reviews_count || 0)).slice(0, 8) : (recRes.data || []));
         setAllProducts(all);
 
         const grouped: Record<string, any[]> = {};
@@ -125,38 +124,27 @@ export default function Shop() {
 
   useEffect(() => {
     if (allProducts.length === 0) return;
-    const prices = allProducts
-      .map((product) => Number(product.price) || 0)
-      .filter((price) => price > 0);
+    const prices = allProducts.map((p) => Number(p.price) || 0).filter((p) => p > 0);
     const maxPrice = prices.length > 0 ? Math.max(...prices) : 1000;
     setPriceRange([0, maxPrice]);
   }, [allProducts]);
 
-  // Умный поиск расширяет запрос ключевыми словами по типовым бытовым проблемам.
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const q = searchQuery.toLowerCase().trim();
-
-    // Check problem-based keywords
     let expandedTerms: string[] = [q];
-    for (const [problem, keywords] of Object.entries(PROBLEM_KEYWORDS)) {
-      if (q.includes(problem) || problem.includes(q)) {
-        expandedTerms = [...expandedTerms, ...keywords];
-      }
+    for (const [prob, keys] of Object.entries(PROBLEM_KEYWORDS)) {
+      if (q.includes(prob) || prob.includes(q)) expandedTerms = [...expandedTerms, ...keys];
     }
-
     return allProducts.filter(p => {
-      const name = (p.name || "").toLowerCase();
-      const cat = (p.shop_categories?.name || "").toLowerCase();
-      const desc = (p.description || "").toLowerCase();
-      return expandedTerms.some(term =>
-        name.includes(term) || cat.includes(term) || desc.includes(term)
-      );
+      const n = (p.name || "").toLowerCase();
+      const c = (p.shop_categories?.name || "").toLowerCase();
+      const d = (p.description || "").toLowerCase();
+      return expandedTerms.some(t => n.includes(t) || c.includes(t) || d.includes(t));
     }).slice(0, 20);
   }, [searchQuery, allProducts]);
 
   const handleSearch = (query: string) => {
-    // Сохраняем последние осмысленные поисковые запросы в localStorage.
     setSearchQuery(query);
     if (query.trim().length > 2) {
       const updated = [query, ...recentSearches.filter(s => s !== query)].slice(0, 5);
@@ -167,39 +155,32 @@ export default function Shop() {
 
   const isSearchActive = searchQuery.trim().length > 0;
   const maxAvailablePrice = useMemo(() => {
-    const prices = allProducts
-      .map((product) => Number(product.price) || 0)
-      .filter((price) => price > 0);
+    const prices = allProducts.map((p) => Number(p.price) || 0).filter((p) => p > 0);
     return prices.length > 0 ? Math.max(...prices) : 1000;
   }, [allProducts]);
   const categoryProductCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    for (const product of allProducts) {
-      counts[product.category_id] = (counts[product.category_id] || 0) + 1;
-    }
+    for (const p of allProducts) counts[p.category_id] = (counts[p.category_id] || 0) + 1;
     return counts;
   }, [allProducts]);
 
   const filteredProducts = useMemo(() => {
-    const normalized = [...allProducts].filter((product) => {
-      const price = Number(product.price) || 0;
-      if (selectedCategory !== "all" && product.category_id !== selectedCategory) return false;
-      if (inStockOnly && !product.in_stock) return false;
-      if (discountOnly && !product.old_price) return false;
-      if (installOnly && !product.installation_price) return false;
+    const normalized = [...allProducts].filter((p) => {
+      const price = Number(p.price) || 0;
+      if (selectedCategory !== "all" && p.category_id !== selectedCategory) return false;
+      if (inStockOnly && !p.in_stock) return false;
+      if (discountOnly && !p.old_price) return false;
+      if (installOnly && !p.installation_price) return false;
       if (price < priceRange[0] || price > priceRange[1]) return false;
       return true;
     });
-
     normalized.sort((a, b) => {
       if (sortBy === "price-asc") return (Number(a.price) || 0) - (Number(b.price) || 0);
       if (sortBy === "price-desc") return (Number(b.price) || 0) - (Number(a.price) || 0);
       if (sortBy === "new") return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
       if (sortBy === "rating") return (Number(b.rating) || 0) - (Number(a.rating) || 0);
-      return ((Number(b.reviews_count) || 0) + ((b.is_popular || b.is_discounted) ? 25 : 0))
-        - ((Number(a.reviews_count) || 0) + ((a.is_popular || a.is_discounted) ? 25 : 0));
+      return ((Number(b.reviews_count) || 0) + ((b.is_popular || b.is_discounted) ? 25 : 0)) - ((Number(a.reviews_count) || 0) + ((a.is_popular || a.is_discounted) ? 25 : 0));
     });
-
     return normalized;
   }, [allProducts, selectedCategory, inStockOnly, discountOnly, installOnly, priceRange, sortBy]);
 
@@ -216,7 +197,6 @@ export default function Shop() {
     <div className="min-h-screen bg-background">
       <Header />
 
-      {/* HERO */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-emerald-50/80 to-background dark:from-primary/5 dark:via-emerald-950/30 dark:to-background" />
         <div className="container px-4 mx-auto py-14 md:py-24 relative z-10">
@@ -233,7 +213,6 @@ export default function Shop() {
                 {t("shopSubtitle")}
               </p>
 
-              {/* SEARCH BAR */}
               <div ref={searchRef} className="relative max-w-xl mb-8">
                 <div className="relative">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -253,7 +232,6 @@ export default function Shop() {
                   )}
                 </div>
 
-                {/* Search dropdown */}
                 {searchFocused && !isSearchActive && (
                   <div className="absolute top-full left-0 right-0 mt-2 bg-background rounded-2xl shadow-xl border border-border p-4 z-50">
                     {recentSearches.length > 0 && (
@@ -314,7 +292,7 @@ export default function Shop() {
                     <div className="rounded-xl bg-destructive/10 p-2"><Percent className="w-4 h-4 text-destructive" /></div>
                     <div>
                       <p className="font-semibold text-foreground">Акции</p>
-                      <p className="text-xs text-muted-foreground">Скидки, горячие предложения и промокоды</p>
+                      <p className="text-xs text-muted-foreground">Скидки, предложения и промокоды</p>
                     </div>
                   </div>
                 </Link>
@@ -323,7 +301,7 @@ export default function Shop() {
                     <div className="rounded-xl bg-primary/10 p-2"><Building2 className="w-4 h-4 text-primary" /></div>
                     <div>
                       <p className="font-semibold text-foreground">Бренды</p>
-                      <p className="text-xs text-muted-foreground">Подборка товаров по производителям</p>
+                      <p className="text-xs text-muted-foreground">Подборка товаров по брендам</p>
                     </div>
                   </div>
                 </Link>
@@ -332,7 +310,7 @@ export default function Shop() {
                     <div className="rounded-xl bg-amber-500/10 p-2"><Scale className="w-4 h-4 text-amber-600" /></div>
                     <div>
                       <p className="font-semibold text-foreground">Сравнение</p>
-                      <p className="text-xs text-muted-foreground">Выбрано товаров: {compareIds.length}/4</p>
+                      <p className="text-xs text-muted-foreground">Выбрано: {compareIds.length}/4</p>
                     </div>
                   </div>
                 </Link>
@@ -348,7 +326,6 @@ export default function Shop() {
         </div>
       </section>
 
-      {/* SEARCH RESULTS */}
       {isSearchActive && (
         <section className="py-10">
           <div className="container px-4 mx-auto">
@@ -375,10 +352,8 @@ export default function Shop() {
         </section>
       )}
 
-      {/* REST OF SHOP (hidden during search) */}
       {!isSearchActive && (
         <>
-          {/* CATEGORIES */}
           <section id="categories" className="py-14">
             <div className="container px-4 mx-auto">
               <div className="mb-8">
@@ -395,7 +370,7 @@ export default function Shop() {
                     const Icon = ICON_MAP[cat.icon] || Package;
                     return (
                       <motion.div key={cat.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
-                        <Link to={`/shop/category/${cat.id}`}>
+                        <div onClick={() => handleCategoryCardClick(cat.id)}>
                           <Card className="hover:shadow-xl transition-all hover:-translate-y-1.5 cursor-pointer border-border group h-full">
                             {cat.image_url && (
                               <div className="h-20 overflow-hidden rounded-t-lg">
@@ -410,7 +385,7 @@ export default function Shop() {
                               <p className="text-xs text-muted-foreground mt-1">{categoryProductCounts[cat.id] || 0} {t("shopProducts")}</p>
                             </CardContent>
                           </Card>
-                        </Link>
+                        </div>
                       </motion.div>
                     );
                   })}
@@ -419,7 +394,7 @@ export default function Shop() {
             </div>
           </section>
 
-          <section className="py-8 border-t border-border bg-muted/20">
+          <section ref={productsRef} className="py-8 border-t border-border bg-muted/20">
             <div className="container px-4 mx-auto">
               <div className="flex flex-col gap-6">
                 <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
@@ -457,8 +432,8 @@ export default function Shop() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">{t("shopAllCategories")}</SelectItem>
-                            {categories.map((category) => (
-                              <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
+                            {categories.map((c) => (
+                              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -467,38 +442,27 @@ export default function Shop() {
                       <div>
                         <div className="flex items-center justify-between gap-3 mb-2">
                           <p className="text-sm font-medium text-foreground">{t("shopPriceRange")}</p>
-                          <span className="text-xs text-muted-foreground">
-                            {priceRange[0]} - {priceRange[1]} {t("som")}
-                          </span>
+                          <span className="text-xs text-muted-foreground">{priceRange[0]} - {priceRange[1]} {t("som")}</span>
                         </div>
-                        <Slider
-                          value={priceRange}
-                          min={0}
-                          max={Math.max(maxAvailablePrice, 1)}
-                          step={5}
-                          minStepsBetweenThumbs={1}
-                          onValueChange={(value) => setPriceRange([value[0], value[1]] as [number, number])}
-                        />
+                        <Slider value={priceRange} min={0} max={Math.max(maxAvailablePrice, 1)} step={5} minStepsBetweenThumbs={1} onValueChange={(v) => setPriceRange([v[0], v[1]] as [number, number])} />
                       </div>
 
                       <label className="flex items-center gap-3 rounded-xl border border-border px-4 py-3 bg-background cursor-pointer">
-                        <Checkbox checked={inStockOnly} onCheckedChange={(checked) => setInStockOnly(!!checked)} />
+                        <Checkbox checked={inStockOnly} onCheckedChange={(v) => setInStockOnly(!!v)} />
                         <span className="text-sm font-medium text-foreground">{t("shopInStockOnly")}</span>
                       </label>
 
                       <label className="flex items-center gap-3 rounded-xl border border-border px-4 py-3 bg-background cursor-pointer">
-                        <Checkbox checked={discountOnly} onCheckedChange={(checked) => setDiscountOnly(!!checked)} />
+                        <Checkbox checked={discountOnly} onCheckedChange={(v) => setDiscountOnly(!!v)} />
                         <span className="text-sm font-medium text-foreground">{t("shopDiscountOnly")}</span>
                       </label>
 
                       <label className="flex items-center gap-3 rounded-xl border border-border px-4 py-3 bg-background cursor-pointer">
-                        <Checkbox checked={installOnly} onCheckedChange={(checked) => setInstallOnly(!!checked)} />
+                        <Checkbox checked={installOnly} onCheckedChange={(v) => setInstallOnly(!!v)} />
                         <span className="text-sm font-medium text-foreground">{t("shopMasterInstall")}</span>
                       </label>
 
-                      <Button variant="outline" className="rounded-xl" onClick={resetFilters}>
-                        {t("shopResetFilters")}
-                      </Button>
+                      <Button variant="outline" className="rounded-xl" onClick={resetFilters}>{t("shopResetFilters")}</Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -511,16 +475,13 @@ export default function Shop() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {filteredProducts.map((product) => (
-                      <ProductCard key={product.id} product={product} onAdd={addToCart} t={t} />
-                    ))}
+                    {filteredProducts.map((p) => <ProductCard key={p.id} product={p} onAdd={addToCart} t={t} />)}
                   </div>
                 )}
               </div>
             </div>
           </section>
 
-          {/* DISCOUNTS */}
           {discounted.length > 0 && (
             <section className="py-14 bg-gradient-to-r from-red-50/80 to-orange-50/80 dark:from-red-950/10 dark:to-orange-950/10">
               <div className="container px-4 mx-auto">
@@ -538,7 +499,6 @@ export default function Shop() {
             </section>
           )}
 
-          {/* HOT DEALS with countdown */}
           {hotDeals.length > 0 && (
             <section className="py-14">
               <div className="container px-4 mx-auto">
@@ -551,9 +511,7 @@ export default function Shop() {
                       </h2>
                       <p className="text-muted-foreground text-sm mt-1">{t("shopHotDealsDesc")}</p>
                     </div>
-                    {hotDeals[0]?.promotion_end && (
-                      <CountdownTimer endDate={hotDeals[0].promotion_end} />
-                    )}
+                    {hotDeals[0]?.promotion_end && <CountdownTimer endDate={hotDeals[0].promotion_end} />}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -562,7 +520,6 @@ export default function Shop() {
               </div>
             </section>
           )}
-
 
           <section className="py-14">
             <div className="container px-4 mx-auto">
@@ -573,19 +530,12 @@ export default function Shop() {
                 </h2>
                 <p className="text-muted-foreground text-sm mt-1">{t("shopPopularSubtitle")}</p>
               </div>
-              {loading ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {[...Array(8)].map((_, i) => <div key={i} className="h-72 bg-muted animate-pulse rounded-2xl" />)}
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {popular.map(p => <ProductCard key={p.id} product={p} onAdd={addToCart} t={t} />)}
-                </div>
-              )}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {popular.map(p => <ProductCard key={p.id} product={p} onAdd={addToCart} t={t} />)}
+              </div>
             </div>
           </section>
 
-          {/* INSTALL PROMO */}
           {installProduct && (
             <section className="py-14 bg-gradient-to-br from-primary/5 to-emerald-50/50 dark:from-primary/5 dark:to-emerald-950/10">
               <div className="container px-4 mx-auto">
@@ -627,13 +577,12 @@ export default function Shop() {
             </section>
           )}
 
-          {/* RECOMMENDED */}
           {recommended.length > 0 && (
             <section className="py-14">
               <div className="container px-4 mx-auto">
                 <div className="mb-8">
                   <h2 className="text-2xl md:text-3xl font-bold text-foreground flex items-center gap-2.5">
-                    <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center"><Award className="w-5 h-5 text-amber-600 dark:text-amber-400" /></div>
+                    <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-orange-900/10 flex items-center justify-center"><Award className="w-5 h-5 text-amber-600" /></div>
                     {t("shopRecommended")}
                   </h2>
                   <p className="text-muted-foreground text-sm mt-1">{t("shopRecommendedSubtitle")}</p>
@@ -645,7 +594,6 @@ export default function Shop() {
             </section>
           )}
 
-          {/* BY CATEGORY */}
           {Object.entries(byCategory).map(([catName, products]) => (
             <section key={catName} className="py-10 border-t border-border">
               <div className="container px-4 mx-auto">
@@ -666,40 +614,32 @@ export default function Shop() {
             </section>
           ))}
 
-          {/* TRUST */}
           <section className="py-16 bg-foreground text-background">
-            <div className="container px-4 mx-auto">
-              <div className="text-center mb-12">
-                <h2 className="text-2xl md:text-3xl font-bold mb-3">{t("shopTrustTitle")}</h2>
-                <p className="text-background/60 max-w-lg mx-auto">{t("shopTrustSubtitle")}</p>
-              </div>
+            <div className="container px-4 mx-auto text-center">
+              <h2 className="text-2xl md:text-3xl font-bold mb-3">{t("shopTrustTitle")}</h2>
+              <p className="text-background/60 max-w-lg mx-auto mb-12">{t("shopTrustSubtitle")}</p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12">
                 {[
-                  { icon: Shield, titleKey: "shopTrustMasters", descKey: "shopTrustMastersDesc" },
-                  { icon: Award, titleKey: "shopTrustGuarantee", descKey: "shopTrustGuaranteeDesc" },
-                  { icon: Truck, titleKey: "shopTrustDelivery", descKey: "shopTrustDeliveryDesc" },
-                  { icon: Headphones, titleKey: "shopTrustSupport", descKey: "shopTrustSupportDesc" },
-                ].map((item, i) => (
-                  <motion.div key={i} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }} className="text-center p-6">
-                    <div className="w-14 h-14 mx-auto rounded-2xl bg-primary/20 flex items-center justify-center mb-4">
-                      <item.icon className="w-7 h-7 text-primary" />
-                    </div>
-                    <h3 className="font-semibold text-lg mb-1">{t(item.titleKey)}</h3>
-                    <p className="text-sm text-background/50">{t(item.descKey)}</p>
-                  </motion.div>
+                  { i: Shield, title: "shopTrustMasters", desc: "shopTrustMastersDesc" },
+                  { i: Award, title: "shopTrustGuarantee", desc: "shopTrustGuaranteeDesc" },
+                  { i: Truck, title: "shopTrustDelivery", desc: "shopTrustDeliveryDesc" },
+                  { i: Headphones, title: "shopTrustSupport", desc: "shopTrustSupportDesc" }
+                ].map((item, idx) => (
+                  <div key={idx} className="p-6">
+                    <div className="w-14 h-14 mx-auto rounded-2xl bg-primary/20 flex items-center justify-center mb-4"><item.i className="w-7 h-7 text-primary" /></div>
+                    <h3 className="font-semibold text-lg mb-1">{t(item.title)}</h3>
+                    <p className="text-sm text-background/50">{t(item.desc)}</p>
+                  </div>
                 ))}
               </div>
-              <div className="text-center">
-                <p className="text-background/60 mb-3">{t("shopNeedHelp")}</p>
-                <a href="tel:+992979117007">
-                  <Button size="lg" className="rounded-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-8 h-12 text-base shadow-xl shadow-primary/30">
-                    <Phone className="w-5 h-5" /> +992 979 117 007
-                  </Button>
-                </a>
-              </div>
+              <a href="tel:+992979117007">
+                <Button size="lg" className="rounded-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-8 h-12 text-base shadow-xl shadow-primary/30">
+                  <Phone className="w-5 h-5" /> +992 979 117 007
+                </Button>
+              </a>
             </div>
           </section>
-      </>
+        </>
       )}
 
       <Footer />
@@ -744,8 +684,6 @@ function ProductCard({ product: p, onAdd, t }: { product: any; onAdd: (id: strin
           {isNewProduct && <Badge className="bg-sky-500 text-white text-[10px] shadow-md">Новый</Badge>}
           {p.promotion_label && <Badge className="bg-primary text-primary-foreground text-[10px] shadow-md">{p.promotion_label}</Badge>}
         </div>
-        {p.installation_price && <Badge className="absolute top-2 right-2 bg-primary/90 text-primary-foreground text-[10px] shadow-sm">Установка</Badge>}
-        {p.seller_type === "master" && <Badge className="absolute bottom-2 left-2 bg-primary text-primary-foreground text-[10px] gap-0.5"><Award className="w-2.5 h-2.5" /> {t("shopFromMaster")}</Badge>}
         {!p.in_stock && <div className="absolute inset-0 bg-background/60 flex items-center justify-center"><Badge variant="secondary">{t("shopOutOfStock")}</Badge></div>}
       </div>
       <CardContent className="p-3 flex flex-col flex-1">
@@ -757,12 +695,6 @@ function ProductCard({ product: p, onAdd, t }: { product: any; onAdd: (id: strin
           <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
           <span className="text-xs text-muted-foreground">{p.rating} ({p.reviews_count || 0})</span>
         </div>
-        <div className="flex items-center justify-between gap-2 mb-2 text-[11px]">
-          <span className={`font-medium ${p.in_stock ? "text-emerald-600" : "text-muted-foreground"}`}>
-            {p.in_stock ? `В наличии: ${stockCount} шт.` : t("shopOutOfStock")}
-          </span>
-          {p.installation_price && <span className="text-primary font-medium">Можно с установкой</span>}
-        </div>
         <div className="flex items-end gap-2 mb-3 mt-auto">
           <span className="text-lg font-bold text-foreground">{p.price} {t("som")}</span>
           {p.old_price && <span className="text-xs text-muted-foreground line-through">{p.old_price} {t("som")}</span>}
@@ -771,18 +703,8 @@ function ProductCard({ product: p, onAdd, t }: { product: any; onAdd: (id: strin
           <Link to={`/shop/product/${p.id}`} className="flex-1">
             <Button variant="outline" size="sm" className="w-full rounded-full text-xs h-8">{t("shopDetails")}</Button>
           </Link>
-          <Button
-            variant="outline"
-            size="sm"
-            className={`rounded-full text-xs h-8 px-3 ${compareActive ? "border-primary text-primary" : ""}`}
-            onClick={() => toggleCompare(p.id)}
-            disabled={compareDisabled}
-          >
-            <Scale className="w-3 h-3" />
-          </Button>
-          <Button size="sm" className="rounded-full text-xs h-8 px-3" onClick={() => onAdd(p.id)} disabled={!canAddToCart}>
-            <ShoppingCart className="w-3 h-3" />
-          </Button>
+          <Button variant="outline" size="sm" className={`rounded-full text-xs h-8 px-3 ${compareActive ? "border-primary text-primary" : ""}`} onClick={() => toggleCompare(p.id)} disabled={compareDisabled}><Scale className="w-3 h-3" /></Button>
+          <Button size="sm" className="rounded-full text-xs h-8 px-3" onClick={() => onAdd(p.id)} disabled={!canAddToCart}><ShoppingCart className="w-3 h-3" /></Button>
         </div>
       </CardContent>
     </Card>
