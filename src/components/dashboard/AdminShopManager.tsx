@@ -9,6 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  getLocalShopOrderItemsMap,
+  getLocalShopOrders,
+  mergeShopOrders,
+  updateLocalShopOrderStatus,
+} from "@/lib/localShopOrders";
 import {
   CheckCircle,
   Edit3,
@@ -24,6 +31,7 @@ import {
   Trash2,
   Truck,
   User,
+  XCircle,
 } from "lucide-react";
 
 const orderStatuses = [
@@ -50,6 +58,7 @@ const paymentStatusLabels: Record<string, string> = {
 };
 
 export default function AdminShopManager() {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -89,14 +98,59 @@ export default function AdminShopManager() {
         .limit(50),
     ]);
 
+    const productLookup = Object.fromEntries(((prodsRes.data as any[]) || []).map((product) => [product.id, product]));
+    const localItems = getLocalShopOrderItemsMap();
+    const localOrders = getLocalShopOrders().map((order) => ({
+      ...order,
+      shop_order_items: (localItems[order.id] || []).map((item) => ({
+        ...item,
+        shop_products: productLookup[item.product_id]
+          ? {
+              id: productLookup[item.product_id].id,
+              name: productLookup[item.product_id].name,
+              image_url: productLookup[item.product_id].image_url,
+            }
+          : null,
+      })),
+    }));
+
     setProducts((prodsRes.data as any[]) || []);
     setCategories(catsRes.data || []);
-    setShopOrders((ordersRes.data as any[]) || []);
+    setShopOrders(mergeShopOrders((ordersRes.data as any[]) || [], localOrders));
     setLoading(false);
   };
 
   useEffect(() => {
     load();
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`admin-shop-manager-${user.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "shop_orders" }, () => {
+        void load();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "shop_order_items" }, () => {
+        void load();
+      })
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [user]);
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === "mc_local_shop_orders" || event.key === "mc_fallback_orders") {
+        void load();
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
   const resetForm = () => {
@@ -190,7 +244,14 @@ export default function AdminShopManager() {
 
   const updateOrderStatus = async (orderId: string, status: string) => {
     setUpdatingOrderId(orderId);
-    const { error } = await supabase.from("shop_orders").update({ status }).eq("id", orderId);
+    let error = null;
+
+    if (orderId.startsWith("local-shop-")) {
+      updateLocalShopOrderStatus(orderId, status);
+    } else {
+      const result = await supabase.from("shop_orders").update({ status }).eq("id", orderId);
+      error = result.error;
+    }
     setUpdatingOrderId(null);
 
     if (error) {
@@ -199,6 +260,48 @@ export default function AdminShopManager() {
     }
 
     toast({ title: "Статус заказа обновлен" });
+    load();
+  };
+
+  const quickAcceptOrder = async (orderId: string) => {
+    setUpdatingOrderId(orderId);
+    let error = null;
+
+    if (orderId.startsWith("local-shop-")) {
+      updateLocalShopOrderStatus(orderId, "confirmed");
+    } else {
+      const result = await supabase.from("shop_orders").update({ status: "confirmed" }).eq("id", orderId);
+      error = result.error;
+    }
+    setUpdatingOrderId(null);
+
+    if (error) {
+      toast({ title: "Не удалось принять заказ", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    toast({ title: "Заказ подтвержден" });
+    load();
+  };
+
+  const quickCancelOrder = async (orderId: string) => {
+    setUpdatingOrderId(orderId);
+    let error = null;
+
+    if (orderId.startsWith("local-shop-")) {
+      updateLocalShopOrderStatus(orderId, "cancelled");
+    } else {
+      const result = await supabase.from("shop_orders").update({ status: "cancelled" }).eq("id", orderId);
+      error = result.error;
+    }
+    setUpdatingOrderId(null);
+
+    if (error) {
+      toast({ title: "Не удалось отменить заказ", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    toast({ title: "Заказ отменен" });
     load();
   };
 
@@ -407,10 +510,35 @@ export default function AdminShopManager() {
                   </div>
 
                   <div className="flex flex-wrap gap-2">
+                    {order.status === "pending" && (
+                      <>
+                        <Button
+                          className="rounded-full gap-1 bg-emerald-600 hover:bg-emerald-700"
+                          onClick={() => quickAcceptOrder(order.id)}
+                          disabled={updatingOrderId === order.id}
+                        >
+                          {updatingOrderId === order.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <CheckCircle className="h-4 w-4" />
+                          )}
+                          Подтвердить
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="rounded-full gap-1 border-destructive/30 text-destructive hover:bg-destructive/10"
+                          onClick={() => quickCancelOrder(order.id)}
+                          disabled={updatingOrderId === order.id}
+                        >
+                          <XCircle className="h-4 w-4" />
+                          Отклонить
+                        </Button>
+                      </>
+                    )}
                     <Select
                       value={order.status}
                       onValueChange={(value) => updateOrderStatus(order.id, value)}
-                      disabled={updatingOrderId === order.id}
+                      disabled={updatingOrderId === order.id || order.status === "pending"}
                     >
                       <SelectTrigger className="w-[220px] rounded-full">
                         <SelectValue />

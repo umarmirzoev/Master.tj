@@ -223,7 +223,7 @@ export default function ShopCategory() {
                         size="sm"
                         className="rounded-full text-xs h-8 px-3"
                         onClick={() => addToCart(product.id)}
-                        disabled={!product.in_stock || isFallbackProductId(product.id)}
+                        disabled={!product.in_stock}
                       >
                         <ShoppingCart className="h-3 w-3" />
                       </Button>

@@ -38,7 +38,7 @@ export const Footer = () => {
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center font-bold text-lg shadow-lg">
                   М
                 </div>
-                <span className="text-xl font-bold font-display">Мастер Час</span>
+                <span className="text-xl font-bold font-display">{t("brandName")}</span>
               </Link>
               <p className="text-background/50 text-sm leading-relaxed mb-6 max-w-xs">
                 {t("footerAboutText")}

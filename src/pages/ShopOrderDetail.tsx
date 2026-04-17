@@ -9,6 +9,12 @@ import { SmartProductImage } from "@/components/shop/SmartProductImage";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { getFallbackProductById, isFallbackProductId } from "@/data/shopFallback";
+import {
+  getLocalShopOrderById,
+  getLocalShopOrderItems,
+  updateLocalShopOrderStatus,
+} from "@/lib/localShopOrders";
 import {
   ArrowLeft,
   CreditCard,
@@ -104,36 +110,60 @@ export default function ShopOrderDetail() {
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (!orderData) {
+    const localOrder = getLocalShopOrderById(id);
+    const resolvedOrder = (orderData || localOrder) as ShopOrder | null;
+
+    if (!resolvedOrder || (resolvedOrder as any).user_id !== user.id) {
       setOrder(null);
       setLoading(false);
       return;
     }
 
-    setOrder(orderData as ShopOrder);
+    setOrder(resolvedOrder);
 
     const [{ data: itemsData }, { data: historyData }] = await Promise.all([
       supabase.from("shop_order_items").select("*").eq("order_id", id),
       supabase.from("shop_order_status_history").select("*").eq("order_id", id).order("created_at", { ascending: true }),
     ]);
 
-    const loadedItems = (itemsData || []) as ShopOrderItem[];
+    const loadedItems = [
+      ...((itemsData || []) as ShopOrderItem[]),
+      ...getLocalShopOrderItems(id),
+    ];
+    
     setItems(loadedItems);
-    setHistory((historyData || []) as ShopOrderHistory[]);
+    setHistory(
+      ((historyData || []) as ShopOrderHistory[]).length > 0
+        ? ((historyData || []) as ShopOrderHistory[])
+        : [{
+            id: `${id}-local-history`,
+            status: resolvedOrder.status,
+            note: (resolvedOrder as any).local_only ? "Локально сохранённый заказ" : null,
+            created_at: resolvedOrder.updated_at || resolvedOrder.created_at,
+          }],
+    );
 
     const productIds = [...new Set(loadedItems.map((item) => item.product_id))];
-    if (productIds.length > 0) {
+    const realProductIds = productIds.filter(pid => !isFallbackProductId(pid));
+    
+    let productsMap: Record<string, any> = {};
+
+    if (realProductIds.length > 0) {
       const { data: productsData } = await supabase
         .from("shop_products")
         .select("id, name, image_url, images, price, category_id")
-        .in("id", productIds);
+        .in("id", realProductIds);
 
-      setProducts(
-        Object.fromEntries(((productsData || []) as any[]).map((product) => [product.id, product])),
-      );
-    } else {
-      setProducts({});
+      productsMap = Object.fromEntries(((productsData || []) as any[]).map((product) => [product.id, product]));
     }
+    
+    // Add fallback products to map
+    productIds.filter(pid => isFallbackProductId(pid)).forEach(pid => {
+      const fbProduct = getFallbackProductById(pid);
+      if (fbProduct) productsMap[pid] = fbProduct;
+    });
+
+    setProducts(productsMap);
 
     setLoading(false);
   };
@@ -162,12 +192,19 @@ export default function ShopOrderDetail() {
     if (!order || order.status !== "pending") return;
 
     setCancelling(true);
-    const { error } = await supabase
-      .from("shop_orders")
-      .update({ status: "cancelled" })
-      .eq("id", order.id)
-      .eq("user_id", user?.id)
-      .eq("status", "pending");
+    let error = null;
+
+    if ((order as any).local_only) {
+      updateLocalShopOrderStatus(order.id, "cancelled");
+    } else {
+      const result = await supabase
+        .from("shop_orders")
+        .update({ status: "cancelled" })
+        .eq("id", order.id)
+        .eq("user_id", user?.id)
+        .eq("status", "pending");
+      error = result.error;
+    }
 
     setCancelling(false);
 

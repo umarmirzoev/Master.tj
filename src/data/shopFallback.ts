@@ -1,4 +1,5 @@
 import shopSeedSql from "../../supabase/migrations/20260308101450_571b784e-c3d4-413d-81fc-033e1063062a.sql?raw";
+import { productRealData } from "./productRealData";
 
 type CategoryMeta = {
   name: string;
@@ -112,21 +113,25 @@ const categoryIdByKey = new Map(fallbackShopCategories.map((category, index) => 
 export const fallbackShopProducts: FallbackShopProduct[] = rawProducts.map((product, index) => {
   const categoryIndex = uniqueCategoryKeys.indexOf(product.category);
   const itemIndex = rawProducts.filter((item) => item.category === product.category).findIndex((item) => item.id === product.id);
-  const price = 90 + categoryIndex * 35 + itemIndex * 18;
-  const isDiscounted = itemIndex % 4 === 0;
+  
+  const realData = productRealData[product.name];
+
+  const price = realData?.price ?? (90 + categoryIndex * 35 + itemIndex * 18);
+  const oldPrice = realData?.old_price ?? (itemIndex % 4 === 0 ? price + 35 + categoryIndex * 5 : null);
+  const isDiscounted = !!oldPrice;
   const installationPrice = INSTALLABLE_CATEGORIES.has(product.category) ? 60 + categoryIndex * 10 : null;
 
   return {
     id: product.id,
     name: product.name,
-    description: `${product.name} с доставкой и возможностью заказать установку.`,
+    description: `${product.name} высокого качества с гарантией.`,
     price,
-    old_price: isDiscounted ? price + 35 + categoryIndex * 5 : null,
-    image_url: product.image_url,
-    images: Array.from(new Set(product.images)).slice(0, 5),
+    old_price: oldPrice,
+    image_url: realData?.image_url ?? product.image_url,
+    images: Array.from(new Set([realData?.image_url ?? product.image_url, ...product.images])).filter(Boolean).slice(0, 5),
     category_id: categoryIdByKey.get(product.category) || "",
     shop_categories: { name: CATEGORY_META[product.category]?.name ?? product.category },
-    rating: Number((4.4 + (itemIndex % 5) * 0.1).toFixed(1)),
+    rating: Number((4.6 + (itemIndex % 4) * 0.1).toFixed(1)),
     reviews_count: 8 + categoryIndex * 3 + itemIndex * 2,
     in_stock: true,
     is_popular: itemIndex < 2,

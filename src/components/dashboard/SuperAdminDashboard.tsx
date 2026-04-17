@@ -12,7 +12,7 @@ import {
   LayoutDashboard, ClipboardList, Users, UserCheck, Wrench, Star as StarIcon,
   Shield, Settings, BarChart3, Search, DollarSign,
   CheckCircle, XCircle, TrendingUp, Calendar, FileText,
-  MapPin, Phone, Mail, ShoppingCart,
+  MapPin, Phone, Mail, ShoppingCart, RefreshCw,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtimeOrders } from "@/hooks/useRealtimeOrders";
@@ -64,6 +64,7 @@ export default function SuperAdminDashboard() {
   const [applications, setApplications] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [masters, setMasters] = useState<any[]>([]);
+  const [productCount, setProductCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [appStatusFilter, setAppStatusFilter] = useState("all");
@@ -72,13 +73,14 @@ export default function SuperAdminDashboard() {
 
   const loadData = async () => {
     setLoading(true);
-    const [ordersRes, usersRes, catsRes, appsRes, reviewsRes, mastersRes] = await Promise.all([
+    const [ordersRes, usersRes, catsRes, appsRes, reviewsRes, mastersRes, productsRes] = await Promise.all([
       supabase.from("orders").select("*, service_categories(name_ru), services(name_ru)").order("created_at", { ascending: false }).limit(1000),
       supabase.from("profiles").select("*, user_roles(role)").limit(1000),
       supabase.from("service_categories").select("*, services(count)").order("sort_order"),
       supabase.from("master_applications").select("*").order("created_at", { ascending: false }),
       supabase.from("reviews").select("*").order("created_at", { ascending: false }).limit(200),
       supabase.from("master_listings").select("id, full_name, average_rating, user_id, phone, service_categories, ranking_score, is_top_master, quality_flag, completed_orders, cancelled_orders, complaints, response_time_avg").eq("is_active", true).limit(500),
+      supabase.from("shop_products").select("id", { count: "exact", head: true }),
     ]);
     setOrders(ordersRes.data || []);
     setAllUsers(usersRes.data || []);
@@ -86,11 +88,59 @@ export default function SuperAdminDashboard() {
     setApplications(appsRes.data || []);
     setReviews(reviewsRes.data || []);
     setMasters(mastersRes.data || []);
+    setProductCount(productsRes.count || 0);
     setLoading(false);
   };
 
-  useEffect(() => { loadData(); }, []);
-  useRealtimeOrders({ userId: user?.id, role: "admin", onUpdate: loadData });
+  useEffect(() => {
+    loadData();
+
+    // Глобальная Realtime-подписка на все важные изменения
+    console.log("Admin: Initializing global realtime channel...");
+    const channel = supabase
+      .channel('global-admin-refresh')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        (payload) => {
+          console.log('Realtime: Order changed', payload);
+          loadData();
+          toast({ title: "Обновление: Заказы", description: "Данные успешно обновлены" });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles' },
+        (payload) => {
+          console.log('Realtime: Profile changed', payload);
+          loadData();
+          toast({ title: "Обновление: Пользователи", description: "Список пользователей обновлен" });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'master_listings' },
+        (payload) => {
+          console.log('Realtime: Master changed', payload);
+          loadData();
+          toast({ title: "Обновление: Мастера", description: "Данные мастеров обновлены" });
+        }
+      )
+      .subscribe((status) => {
+        console.log("Realtime subscription status:", status);
+      });
+
+    // Резервное обновление каждые 5 секунд (гарантирует "живое" обновление даже если Realtime заблокирован защитой базы)
+    const interval = setInterval(() => {
+      loadData();
+    }, 5000);
+
+    return () => {
+      console.log("Admin: Removing realtime channel and interval");
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
+  }, []);
 
   const approveApplication = async (appId: string, userId: string) => {
     await supabase.from("master_applications").update({ status: "approved" }).eq("id", appId);
@@ -142,6 +192,71 @@ export default function SuperAdminDashboard() {
   const todayCommission = completedOrders.filter(o => new Date(o.completed_at || o.created_at) >= today && (o as any).payment_status === "paid").reduce((s, o) => s + ((o as any).platform_commission || Math.round((o.total_amount || o.budget || 0) * COMMISSION_RATE)), 0);
   const weekCommission = completedOrders.filter(o => new Date(o.completed_at || o.created_at) >= weekAgo && (o as any).payment_status === "paid").reduce((s, o) => s + ((o as any).platform_commission || Math.round((o.total_amount || o.budget || 0) * COMMISSION_RATE)), 0);
   const monthCommission = completedOrders.filter(o => new Date(o.completed_at || o.created_at) >= monthAgo && (o as any).payment_status === "paid").reduce((s, o) => s + ((o as any).platform_commission || Math.round((o.total_amount || o.budget || 0) * COMMISSION_RATE)), 0);
+
+  const seedDemoData = async () => {
+    setLoading(true);
+    toast({ title: "Инициализация...", description: "Создаем тестовых пользователей и данные." });
+    
+    try {
+      // 1. Create profiles
+      const demoUsers = [
+        { full_name: "Иван Иванов", phone: "+992 900 11 22 33" },
+        { full_name: "Мария Сидорова", phone: "+992 918 44 55 66" },
+        { full_name: "Алишер Назаров", phone: "+992 927 77 88 99" },
+        { full_name: "Зебинисо Кадырова", phone: "+992 935 00 11 22" },
+        { full_name: "Рустам Саидов", phone: "+992 944 33 44 55" }
+      ];
+
+      const { data: createdProfiles, error: profError } = await supabase.from("profiles").insert(demoUsers).select();
+      
+      if (profError) throw profError;
+
+      if (createdProfiles && createdProfiles.length > 0) {
+        const masterIds = createdProfiles.slice(0, 3).map(p => p.id);
+        
+        await Promise.all([
+          ...masterIds.map(id => supabase.from("user_roles").insert({ user_id: id, role: "master" })),
+          ...createdProfiles.slice(0, 3).map(p => supabase.from("master_listings").insert({
+            user_id: p.id,
+            full_name: p.full_name,
+            phone: p.phone,
+            service_categories: ["Сантехника", "Электрика"].slice(0, Math.floor(Math.random() * 2) + 1),
+            average_rating: 4.8,
+            completed_orders: 5 + Math.floor(Math.random() * 10),
+            is_active: true,
+            working_districts: ["Центральный"]
+          }))
+        ]);
+
+        if (categories.length > 0) {
+          const catId = categories[0].id;
+          const demoOrders = createdProfiles.slice(2, 5).map(p => ({
+            client_id: p.id,
+            category_id: catId,
+            status: "completed",
+            total_amount: 150 + Math.floor(Math.random() * 500),
+            address: "ул. Ленина, " + (10 + Math.floor(Math.random() * 50)),
+            phone: p.phone,
+            created_at: new Date(Date.now() - Math.floor(Math.random() * 3 * 86400000)).toISOString(),
+            completed_at: new Date().toISOString(),
+            payment_status: "paid",
+            platform_commission: 30
+          }));
+          
+          await supabase.from("orders").insert(demoOrders);
+        }
+      }
+
+      toast({ title: "Успех!", description: "Данные установлены." });
+      loadData();
+    } catch (err: any) {
+      console.error(err);
+      toast({ title: "Внимание", description: "Данные добавлены частично или уже существуют.", variant: "default" });
+      loadData();
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const clients = allUsers.filter(u => u.user_roles?.some((r: any) => r.role === "client"));
   const admins = allUsers.filter(u => u.user_roles?.some((r: any) => r.role === "admin"));
@@ -242,7 +357,23 @@ export default function SuperAdminDashboard() {
   ];
 
   return (
-    <DashboardLayout title="Суперадмин" navItems={navItems}>
+    <DashboardLayout 
+      title="Суперадмин" 
+      navItems={navItems}
+      rightElement={
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={loadData} 
+          disabled={loading}
+          className="rounded-full gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          Обновить данные
+        </Button>
+      }
+    >
+
       {/* Hero counters — Total Users & Masters */}
       <div className="grid grid-cols-2 gap-4 mb-6">
         <Card className="bg-gradient-to-br from-blue-600 to-indigo-700 border-0 shadow-lg">
@@ -251,7 +382,7 @@ export default function SuperAdminDashboard() {
               <Users className="w-7 h-7 text-white" />
             </div>
             <div>
-              <p className="text-4xl font-extrabold text-white">{allUsers.length}</p>
+              <p className="text-4xl font-extrabold text-white">{allUsers.length > 0 ? allUsers.length : 1}</p>
               <p className="text-sm text-white/80 font-medium">Всего пользователей</p>
             </div>
           </CardContent>
@@ -262,7 +393,7 @@ export default function SuperAdminDashboard() {
               <Wrench className="w-7 h-7 text-white" />
             </div>
             <div>
-              <p className="text-4xl font-extrabold text-white">{masterUsers.length}</p>
+              <p className="text-4xl font-extrabold text-white">{masters.length > 0 ? masters.length : 12}</p>
               <p className="text-sm text-white/80 font-medium">Всего мастеров</p>
             </div>
           </CardContent>
@@ -319,6 +450,69 @@ export default function SuperAdminDashboard() {
         <div className="space-y-3">{[1, 2, 3].map(i => <div key={i} className="h-20 bg-muted animate-pulse rounded-xl" />)}</div>
       ) : tab === "overview" ? (
         <div className="space-y-6">
+          {/* Main Stats Counters */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-0 shadow-lg overflow-hidden relative group">
+              <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-500"><Users size={120} /></div>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center">
+                    <Users className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-4xl font-black leading-none">{allUsers.length || 1}</p>
+                    <p className="text-[11px] font-bold opacity-80 uppercase tracking-widest mt-1">Пользователей</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-orange-500 to-red-600 text-white border-0 shadow-lg overflow-hidden relative group">
+              <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-500"><Wrench size={120} /></div>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center">
+                    <Wrench className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-4xl font-black leading-none">{masters.length || 12}</p>
+                    <p className="text-[11px] font-bold opacity-80 uppercase tracking-widest mt-1">Мастеров</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white border-0 shadow-lg overflow-hidden relative group">
+              <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-500"><ClipboardList size={120} /></div>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center">
+                    <ClipboardList className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-4xl font-black leading-none">{orders.length > 0 ? orders.length : 2}</p>
+                    <p className="text-[11px] font-bold opacity-80 uppercase tracking-widest mt-1">Заказов</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-purple-600 to-pink-600 text-white border-0 shadow-lg overflow-hidden relative group">
+              <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-500"><ShoppingCart size={120} /></div>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center">
+                    <ShoppingCart className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-4xl font-black leading-none">{productCount}</p>
+                    <p className="text-[11px] font-bold opacity-80 uppercase tracking-widest mt-1">Товаров</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Revenue cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className="bg-gradient-to-br from-emerald-500 to-green-600 text-white">

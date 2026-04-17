@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { getLocalShopOrderById } from "@/lib/localShopOrders";
 import {
   ArrowRight,
   CheckCircle2,
@@ -59,7 +60,9 @@ export default function ShopThankYou() {
         .eq("user_id", user.id)
         .maybeSingle();
 
-      setOrder(data || null);
+      const localOrder = getLocalShopOrderById(id);
+      const resolvedOrder = data || (localOrder?.user_id === user.id ? localOrder : null);
+      setOrder(resolvedOrder || null);
       setLoading(false);
     };
 

@@ -134,7 +134,7 @@ export default function ShopCompare() {
                       <Button
                         className="flex-1 rounded-full"
                         onClick={() => addToCart(product.id)}
-                        disabled={!product.in_stock || isFallbackProductId(product.id)}
+                        disabled={!product.in_stock}
                       >
                         <ShoppingCart className="h-4 w-4" />
                       </Button>

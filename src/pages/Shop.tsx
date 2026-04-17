@@ -55,6 +55,7 @@ const POPULAR_SEARCHES = ["Смеситель", "Розетка", "Камера"
 
 export default function Shop() {
   const { t } = useLanguage();
+  const brandName = t("brandName");
   const [categories, setCategories] = useState<any[]>([]);
   const [allProducts, setAllProducts] = useState<any[]>([]);
   const [popular, setPopular] = useState<any[]>([]);
@@ -206,8 +207,8 @@ export default function Shop() {
                 <Sparkles className="w-3.5 h-3.5 mr-1.5" /> {t("shopMarketplace")}
               </Badge>
               <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-foreground mb-5 leading-[1.1] tracking-tight">
-                {t("shopTitle").replace("Master Chas", "").trim()}{" "}
-                <span className="text-primary">Master Chas</span>
+                {t("shopTitle").replace(brandName, "").trim()}{" "}
+                <span className="text-primary">{brandName}</span>
               </h1>
               <p className="text-lg md:text-xl text-muted-foreground max-w-xl mb-8 leading-relaxed">
                 {t("shopSubtitle")}
@@ -666,7 +667,7 @@ function HorizontalScroll({ children }: { children: React.ReactNode }) {
 function ProductCard({ product: p, onAdd, t }: { product: any; onAdd: (id: string) => void; t: (key: string) => string }) {
   const { toggleCompare, isComparing, compareIds, maxCompareItems } = useProductComparison();
   const discount = p.old_price ? Math.round((1 - p.price / p.old_price) * 100) : 0;
-  const canAddToCart = p.in_stock && !isFallbackProductId(p.id);
+  const canAddToCart = p.in_stock;
   const stockCount = p.stock_qty ?? p.stock_quantity ?? p.quantity ?? (p.in_stock ? Math.max(3, ((p.reviews_count || 0) % 9) + 2) : 0);
   const isNewProduct = !!p.created_at && Date.now() - new Date(p.created_at).getTime() < 1000 * 60 * 60 * 24 * 45;
   const compareActive = isComparing(p.id);

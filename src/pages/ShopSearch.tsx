@@ -279,7 +279,7 @@ export default function ShopSearch() {
                           <Button
                             className="rounded-full"
                             onClick={() => addToCart(product.id)}
-                            disabled={!product.in_stock || isFallbackProductId(product.id)}
+                            disabled={!product.in_stock}
                           >
                             {product.installation_price ? <Wrench className="h-4 w-4" /> : <ShoppingCart className="h-4 w-4" />}
                           </Button>

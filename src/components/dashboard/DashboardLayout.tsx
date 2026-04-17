@@ -41,7 +41,7 @@ export default function DashboardLayout({ children, title, navItems }: Dashboard
             М
           </div>
           <div>
-            <span className="text-base font-bold text-foreground block leading-tight">Мастер Час</span>
+            <span className="text-base font-bold text-foreground block leading-tight">{t("brandName")}</span>
             <span className="text-[11px] text-muted-foreground">Панель управления</span>
           </div>
         </Link>

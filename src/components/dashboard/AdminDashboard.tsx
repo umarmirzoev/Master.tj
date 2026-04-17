@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtimeOrders } from "@/hooks/useRealtimeOrders";
+import { getLocalShopOrders, mergeShopOrders, updateLocalShopOrderStatus } from "@/lib/localShopOrders";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
@@ -71,11 +73,26 @@ const chartColors = ["#10b981", "#3b82f6", "#8b5cf6", "#f59e0b", "#ef4444", "#06
 
 type Tab = "overview" | "analytics" | "orders" | "applications" | "users" | "masters" | "reviews" | "shop" | "support" | "promo";
 
+const ADMIN_TAB_BY_PATH: Record<string, Tab> = {
+  "/admin/dashboard": "overview",
+  "/admin/dashboard/analytics": "analytics",
+  "/admin/dashboard/orders": "orders",
+  "/admin/dashboard/applications": "applications",
+  "/admin/dashboard/users": "users",
+  "/admin/dashboard/masters": "masters",
+  "/admin/dashboard/reviews": "reviews",
+  "/admin/dashboard/shop": "shop",
+  "/admin/dashboard/support": "support",
+  "/admin/dashboard/promo": "promo",
+};
+
 export default function AdminDashboard() {
   const { user } = useAuth();
   const { t } = useLanguage();
   const { toast } = useToast();
-  const [tab, setTab] = useState<Tab>("overview");
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [tab, setTab] = useState<Tab>(ADMIN_TAB_BY_PATH[location.pathname] || "overview");
   const [orders, setOrders] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -101,15 +118,20 @@ export default function AdminDashboard() {
   // Application detail
   const [detailApp, setDetailApp] = useState<any>(null);
 
+  useEffect(() => {
+    setTab(ADMIN_TAB_BY_PATH[location.pathname] || "overview");
+  }, [location.pathname]);
+
   const loadData = async () => {
     setLoading(true);
-    const [ordersRes, usersRes, catsRes, appsRes, reviewsRes, mastersRes] = await Promise.all([
+    const [ordersRes, usersRes, catsRes, appsRes, reviewsRes, mastersRes, shopOrdersRes] = await Promise.all([
       supabase.from("orders").select("*, service_categories(name_ru), services(name_ru)").order("created_at", { ascending: false }).limit(500),
       supabase.from("profiles").select("*, user_roles(role)").limit(500),
       supabase.from("service_categories").select("*, services(count)").order("sort_order"),
       supabase.from("master_applications").select("*").order("created_at", { ascending: false }),
       supabase.from("reviews").select("*").order("created_at", { ascending: false }).limit(100),
       supabase.from("master_listings").select("id, full_name, phone, service_categories, average_rating, user_id, working_districts, ranking_score, is_top_master, quality_flag, completed_orders").eq("is_active", true).order("ranking_score", { ascending: false }).limit(200),
+      supabase.from("shop_orders").select("id, status, created_at, total, customer_name, phone, delivery_address, payment_status").order("created_at", { ascending: false }).limit(500),
     ]);
     setOrders(ordersRes.data || []);
     setAllUsers(usersRes.data || []);
@@ -117,11 +139,27 @@ export default function AdminDashboard() {
     setApplications(appsRes.data || []);
     setReviews(reviewsRes.data || []);
     setMasters(mastersRes.data || []);
+    setShopOrders(
+      mergeShopOrders((shopOrdersRes.data || []) as any[], getLocalShopOrders() as any[]),
+    );
     setLoading(false);
   };
 
+  const [shopOrders, setShopOrders] = useState<any[]>([]);
+
   useEffect(() => { loadData(); }, []);
   useRealtimeOrders({ userId: user?.id, role: "admin", onUpdate: loadData });
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === "mc_local_shop_orders" || event.key === "mc_fallback_orders") {
+        void loadData();
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
 
   const updateOrderStatus = async (orderId: string, status: string) => {
     const updateData: any = { status };
@@ -151,6 +189,25 @@ export default function AdminDashboard() {
         }
       }
     }
+  };
+
+  const updateShopOrderStatus = async (orderId: string, status: string) => {
+    let error = null;
+
+    if (orderId.startsWith("local-shop-")) {
+      updateLocalShopOrderStatus(orderId, status);
+    } else {
+      const result = await supabase.from("shop_orders").update({ status }).eq("id", orderId);
+      error = result.error;
+    }
+
+    if (error) {
+      toast({ title: "Ошибка", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    toast({ title: "Статус заказа магазина обновлен" });
+    loadData();
   };
 
   const assignMaster = async () => {
@@ -266,7 +323,8 @@ export default function AdminDashboard() {
   }, [allUsers, userRoleFilter, search, tab]);
 
   const pendingApps = applications.filter(a => a.status === "pending");
-  const newOrders = orders.filter(o => o.status === "new");
+  const newOrders = orders.filter(o => o.status === "new" || o.status === "pending");
+  const pendingShopOrders = shopOrders.filter(o => o.status === "pending");
   const activeOrders = orders.filter(o => !["completed", "cancelled", "reviewed"].includes(o.status));
   const completedOrds = orders.filter(o => o.status === "completed" || o.status === "reviewed");
   const cancelledOrders = orders.filter(o => o.status === "cancelled");
@@ -313,40 +371,6 @@ export default function AdminDashboard() {
     return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([name, value]) => ({ name, value }));
   }, [orders]);
 
-  const navItems = [
-    { path: "/admin/dashboard", label: "Панель", icon: LayoutDashboard },
-    { path: "/admin/dashboard/orders", label: "Заказы", icon: ClipboardList, badge: newOrders.length },
-    { path: "/admin/dashboard/users", label: "Пользователи", icon: Users },
-    { path: "/admin/dashboard/masters", label: "Мастера", icon: Wrench },
-    { path: "/admin/dashboard/applications", label: "Заявки", icon: FileText, badge: pendingApps.length },
-    { path: "/admin/dashboard/reviews", label: "Отзывы", icon: StarIcon },
-    { path: "/admin/dashboard/shop", label: "Магазин", icon: ShoppingCart },
-  ];
-
-  const stats = [
-    { label: "Пользователей", value: allUsers.length, icon: Users, gradient: "from-blue-500/10 to-sky-500/10", iconColor: "text-blue-600", iconBg: "bg-blue-500/10" },
-    { label: "Клиентов", value: clientUsers.length, icon: Users, gradient: "from-violet-500/10 to-purple-500/10", iconColor: "text-violet-600", iconBg: "bg-violet-500/10" },
-    { label: "Мастеров", value: masters.length, icon: Wrench, gradient: "from-orange-500/10 to-red-500/10", iconColor: "text-orange-600", iconBg: "bg-orange-500/10" },
-    { label: "Новых", value: newOrders.length, icon: ClipboardList, gradient: "from-blue-500/10 to-sky-500/10", iconColor: "text-blue-600", iconBg: "bg-blue-500/10" },
-    { label: "Активных", value: activeOrders.length, icon: TrendingUp, gradient: "from-amber-500/10 to-yellow-500/10", iconColor: "text-amber-600", iconBg: "bg-amber-500/10" },
-    { label: "Завершённых", value: completedOrds.length, icon: CheckCircle, gradient: "from-emerald-500/10 to-green-500/10", iconColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
-    { label: "Отменённых", value: cancelledOrders.length, icon: XCircle, gradient: "from-red-500/10 to-rose-500/10", iconColor: "text-red-600", iconBg: "bg-red-500/10" },
-    { label: "Заявки ожид.", value: pendingApps.length, icon: FileText, gradient: "from-rose-500/10 to-pink-500/10", iconColor: "text-rose-600", iconBg: "bg-rose-500/10" },
-  ];
-
-  const tabs: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }>; count?: number }[] = [
-    { key: "overview", label: "Обзор", icon: LayoutDashboard },
-    { key: "analytics", label: "Аналитика", icon: BarChart3 },
-    { key: "orders", label: "Заказы", icon: ClipboardList, count: orders.length },
-    { key: "applications", label: "Заявки мастеров", icon: FileText, count: pendingApps.length },
-    { key: "users", label: "Пользователи", icon: Users, count: allUsers.length },
-    { key: "masters", label: "Мастера", icon: Wrench },
-    { key: "reviews", label: "Отзывы", icon: StarIcon },
-    { key: "support", label: "Поддержка", icon: HelpCircle },
-    { key: "promo", label: "Промокоды", icon: Tag },
-    { key: "shop", label: "Магазин", icon: ShoppingCart },
-  ];
-
   const getClientName = (clientId: string) => {
     const u = allUsers.find(u => u.user_id === clientId);
     return u?.full_name || "—";
@@ -373,6 +397,70 @@ export default function AdminDashboard() {
     const specs = new Set(applications.map(a => a.specialization).filter(Boolean));
     return Array.from(specs);
   }, [applications]);
+
+  const unifiedNewOrders = useMemo(() => {
+    const serviceItems = newOrders.map((order) => ({
+      id: order.id,
+      kind: "service" as const,
+      created_at: order.created_at,
+      title: order.services?.name_ru || order.service_categories?.name_ru || "Заказ услуги",
+      subtitle: getClientName(order.client_id),
+      meta: order.address || "Без адреса",
+      phone: order.phone || "Без телефона",
+      amount: order.total_amount || order.budget || 0,
+      raw: order,
+    }));
+
+    const shopItems = pendingShopOrders.map((order) => ({
+      id: order.id,
+      kind: "shop" as const,
+      created_at: order.created_at,
+      title: "Заказ товара",
+      subtitle: order.customer_name || "Клиент магазина",
+      meta: order.delivery_address || "Без адреса",
+      phone: order.phone || "Без телефона",
+      amount: order.total || 0,
+      raw: order,
+    }));
+
+    return [...serviceItems, ...shopItems]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }, [newOrders, pendingShopOrders, allUsers]);
+
+  const navItems = [
+    { path: "/admin/dashboard", label: "Панель", icon: LayoutDashboard },
+    { path: "/admin/dashboard/orders", label: "Заказы", icon: ClipboardList, badge: unifiedNewOrders.length },
+    { path: "/admin/dashboard/users", label: "Пользователи", icon: Users },
+    { path: "/admin/dashboard/masters", label: "Мастера", icon: Wrench },
+    { path: "/admin/dashboard/applications", label: "Заявки", icon: FileText, badge: pendingApps.length },
+    { path: "/admin/dashboard/reviews", label: "Отзывы", icon: StarIcon },
+    { path: "/admin/dashboard/shop", label: "Магазин", icon: ShoppingCart, badge: pendingShopOrders.length },
+  ];
+
+  const stats = [
+    { label: "Пользователей", value: allUsers.length, icon: Users, gradient: "from-blue-500/10 to-sky-500/10", iconColor: "text-blue-600", iconBg: "bg-blue-500/10" },
+    { label: "Клиентов", value: clientUsers.length, icon: Users, gradient: "from-violet-500/10 to-purple-500/10", iconColor: "text-violet-600", iconBg: "bg-violet-500/10" },
+    { label: "Мастеров", value: masters.length, icon: Wrench, gradient: "from-orange-500/10 to-red-500/10", iconColor: "text-orange-600", iconBg: "bg-orange-500/10" },
+    { label: "Новых", value: unifiedNewOrders.length, icon: ClipboardList, gradient: "from-blue-500/10 to-sky-500/10", iconColor: "text-blue-600", iconBg: "bg-blue-500/10" },
+    { label: "Активных", value: activeOrders.length, icon: TrendingUp, gradient: "from-amber-500/10 to-yellow-500/10", iconColor: "text-amber-600", iconBg: "bg-amber-500/10" },
+    { label: "Завершённых", value: completedOrds.length, icon: CheckCircle, gradient: "from-emerald-500/10 to-green-500/10", iconColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
+    { label: "Отменённых", value: cancelledOrders.length, icon: XCircle, gradient: "from-red-500/10 to-rose-500/10", iconColor: "text-red-600", iconBg: "bg-red-500/10" },
+    { label: "Заявки ожид.", value: pendingApps.length, icon: FileText, gradient: "from-rose-500/10 to-pink-500/10", iconColor: "text-rose-600", iconBg: "bg-rose-500/10" },
+    { label: "Заказов магаз.", value: shopOrders.length, icon: ShoppingCart, gradient: "from-violet-500/10 to-purple-500/10", iconColor: "text-violet-600", iconBg: "bg-violet-500/10" },
+  ];
+
+  const tabs: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }>; count?: number }[] = [
+    { key: "overview", label: "Обзор", icon: LayoutDashboard },
+    { key: "analytics", label: "Аналитика", icon: BarChart3 },
+    { key: "orders", label: "Заказы", icon: ClipboardList, count: unifiedNewOrders.length },
+    { key: "applications", label: "Заявки мастеров", icon: FileText, count: pendingApps.length },
+    { key: "users", label: "Пользователи", icon: Users, count: allUsers.length },
+    { key: "masters", label: "Мастера", icon: Wrench },
+    { key: "reviews", label: "Отзывы", icon: StarIcon },
+    { key: "support", label: "Поддержка", icon: HelpCircle },
+    { key: "promo", label: "Промокоды", icon: Tag },
+    { key: "shop", label: "Магазин", icon: ShoppingCart, count: shopOrders.length },
+  ];
 
   return (
     <DashboardLayout title="Админ панель" navItems={navItems}>
@@ -422,7 +510,7 @@ export default function AdminDashboard() {
         {tabs.map(tb => {
           const Icon = tb.icon;
           return (
-            <Button key={tb.key} variant={tab === tb.key ? "default" : "ghost"} size="sm" onClick={() => { setTab(tb.key); setSearch(""); }} className="rounded-full whitespace-nowrap gap-1.5 shrink-0 text-xs">
+            <Button key={tb.key} variant={tab === tb.key ? "default" : "ghost"} size="sm" onClick={() => { setTab(tb.key); setSearch(""); navigate(Object.entries(ADMIN_TAB_BY_PATH).find(([, value]) => value === tb.key)?.[0] || "/admin/dashboard"); }} className="rounded-full whitespace-nowrap gap-1.5 shrink-0 text-xs">
               <Icon className="w-3.5 h-3.5" />
               {tb.label}
               {tb.count !== undefined && tb.count > 0 && (
@@ -454,7 +542,10 @@ export default function AdminDashboard() {
                     <p className="text-sm font-medium truncate">{o.services?.name_ru || o.service_categories?.name_ru || "Заказ"}</p>
                     <p className="text-xs text-muted-foreground">{o.address} • {new Date(o.created_at).toLocaleDateString("ru-RU")}</p>
                   </div>
-                  <Button size="sm" className="h-7 text-xs rounded-full shrink-0" onClick={e => { e.stopPropagation(); updateOrderStatus(o.id, "accepted"); }}>Принять</Button>
+                  <div className="flex gap-1 shrink-0">
+                    <Button size="sm" className="h-7 text-xs rounded-full" onClick={e => { e.stopPropagation(); updateOrderStatus(o.id, "accepted"); }}>Принять</Button>
+                    <Button size="sm" variant="destructive" className="h-7 text-xs rounded-full" onClick={e => { e.stopPropagation(); updateOrderStatus(o.id, "cancelled"); }}>Отклонить</Button>
+                  </div>
                 </div>
               ))}
             </CardContent>
@@ -628,6 +719,71 @@ export default function AdminDashboard() {
         </div>
       ) : tab === "orders" ? (
         <>
+          {unifiedNewOrders.length > 0 && (
+            <Card className="mb-4 border-primary/20 bg-primary/5">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4 text-primary" />
+                  Все новые заказы
+                  <Badge className="bg-primary/10 text-primary text-xs">{unifiedNewOrders.length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {unifiedNewOrders.slice(0, 8).map((order) => (
+                  <div
+                    key={`${order.kind}-${order.id}`}
+                    className="flex flex-col gap-3 rounded-xl border border-border bg-background p-3 md:flex-row md:items-center md:justify-between"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-foreground truncate">{order.title}</p>
+                        <Badge variant="secondary" className="text-[10px]">
+                          {order.kind === "shop" ? "Магазин" : "Услуга"}
+                        </Badge>
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        <span>{order.subtitle}</span>
+                        <span>{order.phone}</span>
+                        <span className="truncate">{order.meta}</span>
+                        <span>{new Date(order.created_at).toLocaleDateString("ru-RU")}</span>
+                        {order.amount > 0 && <span className="font-semibold text-primary">{order.amount.toLocaleString()} с.</span>}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 shrink-0">
+                      {order.kind === "service" ? (
+                        <>
+                          <Button size="sm" className="rounded-full" onClick={() => updateOrderStatus(order.id, "accepted")}>
+                            Принять
+                          </Button>
+                          <Button size="sm" variant="destructive" className="rounded-full" onClick={() => updateOrderStatus(order.id, "cancelled")}>
+                            Отклонить
+                          </Button>
+                          <Button size="sm" variant="outline" className="rounded-full" onClick={() => setDetailOrder(order.raw)}>
+                            <Eye className="w-3.5 h-3.5 mr-1" />
+                            Детали
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button size="sm" className="rounded-full" onClick={() => updateShopOrderStatus(order.id, "confirmed")}>
+                            Подтвердить
+                          </Button>
+                          <Button size="sm" variant="destructive" className="rounded-full" onClick={() => updateShopOrderStatus(order.id, "cancelled")}>
+                            Отклонить
+                          </Button>
+                          <Button size="sm" variant="outline" className="rounded-full" onClick={() => navigate("/admin/dashboard/shop")}>
+                            <ShoppingCart className="w-3.5 h-3.5 mr-1" />
+                            В магазин
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
           <div className="flex flex-wrap gap-3 mb-4">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -658,6 +814,63 @@ export default function AdminDashboard() {
               </SelectContent>
             </Select>
           </div>
+
+          {newOrders.length > 0 && (
+            <Card className="mb-4 border-blue-200 bg-blue-50/60 dark:border-blue-900 dark:bg-blue-950/20">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4 text-blue-600" />
+                  Новые заказы
+                  <Badge className="bg-blue-100 text-blue-800 text-xs">{newOrders.length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {newOrders.slice(0, 6).map((order) => (
+                  <div
+                    key={order.id}
+                    className="flex flex-col gap-3 rounded-xl border border-blue-100 bg-background/90 p-3 md:flex-row md:items-center md:justify-between dark:border-blue-900/60"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-foreground truncate">
+                        {order.services?.name_ru || order.service_categories?.name_ru || "Заказ"}
+                      </p>
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        <span>{getClientName(order.client_id)}</span>
+                        <span>{order.phone || "Без телефона"}</span>
+                        <span className="truncate">{order.address || "Без адреса"}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <Button
+                        size="sm"
+                        className="rounded-full"
+                        onClick={() => updateOrderStatus(order.id, "accepted")}
+                      >
+                        Принять
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="rounded-full"
+                        onClick={() => updateOrderStatus(order.id, "cancelled")}
+                      >
+                        Отклонить
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full"
+                        onClick={() => setDetailOrder(order)}
+                      >
+                        <Eye className="w-3.5 h-3.5 mr-1" />
+                        Детали
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           <div className="space-y-2">
             <div className="hidden md:grid grid-cols-12 gap-3 px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -927,9 +1140,23 @@ export default function AdminDashboard() {
                   <SelectContent>{statusFlow.map(s => <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              {!detailOrder.master_id && detailOrder.status !== "cancelled" && (
-                <Button className="w-full rounded-full" onClick={() => { setAssignDialog(detailOrder); setDetailOrder(null); }}>Назначить мастера</Button>
-              )}
+              <div className="flex gap-2">
+                {!detailOrder.master_id && detailOrder.status !== "cancelled" && (
+                  <Button className="flex-1 rounded-full" onClick={() => { setAssignDialog(detailOrder); setDetailOrder(null); }}>Назначить мастера</Button>
+                )}
+                {detailOrder.status === "new" && (
+                  <Button
+                    variant="destructive"
+                    className="flex-1 rounded-full"
+                    onClick={() => {
+                      updateOrderStatus(detailOrder.id, "cancelled");
+                      setDetailOrder({ ...detailOrder, status: "cancelled" });
+                    }}
+                  >
+                    Отклонить заказ
+                  </Button>
+                )}
+              </div>
             </div>
           )}
         </DialogContent>

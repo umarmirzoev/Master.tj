@@ -201,7 +201,7 @@ function PromoProductCard({ product, onAdd, compact = false }: { product: any; o
           <Button
             className="rounded-full"
             onClick={() => onAdd(product.id)}
-            disabled={!product.in_stock || isFallbackProductId(product.id)}
+            disabled={!product.in_stock}
           >
             <ShoppingCart className="h-4 w-4" />
           </Button>

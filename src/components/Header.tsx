@@ -74,6 +74,12 @@ export default function Header() {
   };
 
   const isActive = (path: string) => location.pathname === path;
+  const profileInitials = (profile?.full_name || user?.email || "U")
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <header
@@ -91,7 +97,7 @@ export default function Header() {
               М
             </div>
             <span className="text-lg font-bold text-foreground hidden sm:block tracking-tight font-display">
-              Мастер Час
+              {t("brandName")}
             </span>
           </Link>
 
@@ -114,6 +120,33 @@ export default function Header() {
 
           {/* Правая часть шапки собирает служебные действия пользователя. */}
           <div className="flex items-center gap-1.5">
+            {!loading && user ? (
+              <>
+                <NotificationBell />
+                <Button
+                  onClick={() => navigate(getDashboardPath())}
+                  variant="ghost"
+                  className="hidden sm:flex h-9 items-center gap-2 rounded-xl px-2.5"
+                >
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary">
+                    {profileInitials}
+                  </div>
+                  <span className="max-w-[120px] truncate text-sm font-medium text-foreground">
+                    {profile?.full_name || user.email}
+                  </span>
+                </Button>
+              </>
+            ) : !loading ? (
+              <Button
+                onClick={() => navigate("/auth")}
+                size="sm"
+                className="hidden sm:flex rounded-xl gap-2 px-4 h-9 bg-gradient-to-r from-primary to-primary-glow hover:opacity-90 shadow-sm"
+              >
+                <LogIn className="w-4 h-4" />
+                {t("login")}
+              </Button>
+            ) : null}
+
             {/* Корзина всегда доступна и показывает текущее количество товаров. */}
             <Link to="/cart">
               <Button variant="ghost" size="icon" className="rounded-xl relative h-9 w-9">
@@ -145,20 +178,11 @@ export default function Header() {
             <div className="hidden sm:flex items-center gap-1.5">
               {!loading && user ? (
                 <>
-                  <NotificationBell />
-                  <Button onClick={() => navigate(getDashboardPath())} size="sm" variant="ghost" className="rounded-xl gap-2 h-9 px-3">
-                    <LayoutDashboard className="w-4 h-4" />
-                    <span className="hidden md:inline">{t("cabinet")}</span>
-                  </Button>
                   <Button onClick={signOut} size="sm" variant="outline" className="rounded-xl gap-2 h-9 px-3 border-border/60">
                     <LogOut className="w-4 h-4" />
+                    <span className="hidden md:inline">{t("logout")}</span>
                   </Button>
                 </>
-              ) : !loading ? (
-                <Button onClick={() => navigate("/auth")} size="sm" className="rounded-xl gap-2 px-5 h-9 bg-gradient-to-r from-primary to-primary-glow hover:opacity-90 shadow-sm">
-                  <LogIn className="w-4 h-4" />
-                  {t("login")}
-                </Button>
               ) : null}
             </div>
 
@@ -175,7 +199,7 @@ export default function Header() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
                         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center text-primary-foreground font-bold shadow-md">М</div>
-                        <span className="text-lg font-bold text-foreground font-display">Мастер Час</span>
+                        <span className="text-lg font-bold text-foreground font-display">{t("brandName")}</span>
                       </div>
                       <SheetClose asChild>
                         <Button variant="ghost" size="icon" className="rounded-xl h-8 w-8"><X className="w-5 h-5" /></Button>

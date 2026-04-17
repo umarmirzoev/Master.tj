@@ -12,6 +12,7 @@ interface LanguageContextType {
 const translations: Record<Language, Record<string, string>> = {
   ru: {
     // Nav
+    brandName: "Мастер ТЧ",
     navAbout: "О нас",
     navCategories: "Услуги",
     navMasters: "Мастера",
@@ -164,7 +165,7 @@ const translations: Record<Language, Record<string, string>> = {
     orderModalSuccess: "Дархост қабул шуд! Мы скоро свяжемся.",
 
     // ===== SHOP =====
-    shopTitle: "Магазин Master Chas",
+    shopTitle: "Магазин Мастер ТЧ",
     shopSubtitle: "Товары для ремонта, дома и установки — с доставкой и возможностью заказать мастера для монтажа",
     shopMarketplace: "Маркетплейс товаров",
     shopGoToCatalog: "Перейти в каталог",
@@ -196,7 +197,7 @@ const translations: Record<Language, Record<string, string>> = {
     shopRecommended: "Рекомендуем",
     shopRecommendedSubtitle: "Лучшие товары по рейтингу и отзывам",
     shopAllProducts: "Все товары",
-    shopTrustTitle: "Почему покупать у Master Chas?",
+    shopTrustTitle: "Почему покупать у Мастер ТЧ?",
     shopTrustSubtitle: "Мы объединяем магазин и сервис мастеров — всё в одном месте",
     shopTrustMasters: "Проверенные мастера",
     shopTrustMastersDesc: "Все мастера проходят проверку",
@@ -756,6 +757,7 @@ const translations: Record<Language, Record<string, string>> = {
     topProductsDesc: "Самые популярные товары в магазине",
   },
   tj: {
+    brandName: "Мастер ТҶ",
     navAbout: "Дар бораи мо",
     navCategories: "Хидматҳо",
     navMasters: "Устоҳо",
@@ -843,7 +845,7 @@ const translations: Record<Language, Record<string, string>> = {
     orderModalSubmit: "Фиристодан", orderModalSuccess: "Дархост қабул шуд! Мо зуд тамос мегирем.",
 
     // Shop
-    shopTitle: "Мағозаи Master Chas", shopSubtitle: "Молҳо барои таъмир, хона ва насб — бо интиқол ва имконияти фармоиши усто",
+    shopTitle: "Мағозаи Мастер ТҶ", shopSubtitle: "Молҳо барои таъмир, хона ва насб — бо интиқол ва имконияти фармоиши усто",
     shopMarketplace: "Маркетплейси молҳо", shopGoToCatalog: "Ба каталог гузаред",
     shopFindMaster: "Усто барои насб ёбед", shopProducts: "мол", shopCategories: "категория",
     shopDelivery: "Интиқол", shopCart: "Сабад",
@@ -858,7 +860,7 @@ const translations: Record<Language, Record<string, string>> = {
     shopInstallFrom: "Насб аз", shopMasterInstall: "Насб аз тарафи усто",
     shopBuyWithInstallBtn: "Бо насб харед", shopRecommended: "Тавсия мекунем",
     shopRecommendedSubtitle: "Беҳтарин молҳо аз рӯи рейтинг", shopAllProducts: "Ҳамаи молҳо",
-    shopTrustTitle: "Чаро аз Master Chas харед?",
+    shopTrustTitle: "Чаро аз Мастер ТҶ харед?",
     shopTrustSubtitle: "Мо мағоза ва хидмати устоонро дар як ҷо муттаҳид мекунем",
     shopTrustMasters: "Устоони тасдиқшуда", shopTrustMastersDesc: "Ҳамаи устоон тафтиш мешаванд",
     shopTrustGuarantee: "Кафолати кор", shopTrustGuaranteeDesc: "Кафолат ба ҳамаи хидматҳо",
@@ -1085,18 +1087,19 @@ const translations: Record<Language, Record<string, string>> = {
     topProducts: "Молҳои маъмул", topProductsDesc: "Маъмултарин молҳо дар мағоза",
   },
   en: {
+    brandName: "Master TJ",
     navAbout: "About Us", navCategories: "Services", navMasters: "Masters",
     navHowItWorks: "How It Works", navContacts: "Contacts", navBecomeMaster: "Become a Master",
     navShop: "Shop", login: "Login", logout: "Logout", cabinet: "Dashboard", admin: "Admin",
     masterCabinet: "Master Dashboard", clientCabinet: "My Dashboard", subscription: "Subscription",
     heroTitle: "Your master will arrive today", heroSubtitle: "Verified masters • Arrival from 30 min • Work guarantee",
-    heroDescription: "Master Chas is a home service marketplace in Dushanbe. Electrical, plumbing, cleaning, appliance repair and more — fast, reliable, at fair prices in somoni.",
+    heroDescription: "Master TJ is a home service marketplace in Dushanbe. Electrical, plumbing, cleaning, appliance repair and more — fast, reliable, at fair prices in somoni.",
     heroOrderButton: "Call a Master", heroEmergencyButton: "🚨 Emergency Master 24/7",
     heroEmergencySubtext: "arrival 30–60 min in Dushanbe",
     trustTime: "Within 1 hour", trustTimeDesc: "master arrives at your door",
     trustRating: "4.9", trustRatingDesc: "average master rating",
     trustOrders: "5000+", trustOrdersDesc: "orders completed in Dushanbe",
-    aboutTitle: "Master Chas — Home Service in Dushanbe",
+    aboutTitle: "Master TJ — Home Service in Dushanbe",
     aboutDescription: "We help Dushanbe residents quickly find a verified master for any household task.",
     aboutFeature1Title: "Verified Masters", aboutFeature1Desc: "Every master undergoes document and skill verification.",
     aboutFeature2Title: "Prices in Somoni", aboutFeature2Desc: "Transparent prices with no hidden fees.",
@@ -1118,7 +1121,7 @@ const translations: Record<Language, Record<string, string>> = {
     contactsPhone: "Phone", contactsEmail: "Email",
     contactsWorkHours: "Working hours", contactsWorkHoursValue: "24/7 — around the clock",
     becomeMasterTitle: "Become a Master in Dushanbe",
-    becomeMasterSubtitle: "Join the Master Chas team — get orders every day",
+    becomeMasterSubtitle: "Join the Master TJ team — get orders every day",
     becomeMasterBenefit1: "Daily orders", becomeMasterBenefit2: "Flexible schedule",
     becomeMasterBenefit3: "Payment right after the job", becomeMasterBenefit4: "Team support 24/7",
     becomeMasterFormTitle: "Submit Application", becomeMasterFormName: "Your name",
@@ -1134,9 +1137,9 @@ const translations: Record<Language, Record<string, string>> = {
     formDistrict: "Dushanbe District", formComment: "Describe the task (optional)",
     formSubmit: "Submit Request", formSuccess: "Thank you! We'll contact you soon",
     districtSino: "Sino", districtFirdausi: "Firdavsi", districtShomansur: "Shohmansur", districtIsmoili: "Ismoili Somoni",
-    footerAboutText: "Master Chas — home service marketplace in Dushanbe.",
+    footerAboutText: "Master TJ — home service marketplace in Dushanbe.",
     footerContacts: "Contacts", footerDistricts: "Dushanbe Districts",
-    footerRights: "© 2025 Master Chas. Dushanbe, Tajikistan. All rights reserved.",
+    footerRights: "© 2025 Master TJ. Dushanbe, Tajikistan. All rights reserved.",
     footerServices: "Services", footerSubscriptions: "Plans", footerBecomeMaster: "Become a Master",
     footerForBusiness: "For Business", footerPrivacy: "Privacy Policy", footerTerms: "Terms of Service",
     viewAllCategories: "View all service categories", learnMore: "Learn more",
@@ -1145,7 +1148,7 @@ const translations: Record<Language, Record<string, string>> = {
     step: "Step", orderModalTitle: "Call a Master",
     orderModalDesc: "Fill out the form — we'll find a master in your area",
     orderModalSubmit: "Submit", orderModalSuccess: "Request accepted! We'll contact you soon.",
-    shopTitle: "Master Chas Shop", shopSubtitle: "Products for repair, home and installation — with delivery and master installation option",
+    shopTitle: "Master TJ Shop", shopSubtitle: "Products for repair, home and installation — with delivery and master installation option",
     shopMarketplace: "Product Marketplace", shopGoToCatalog: "Browse Catalog",
     shopFindMaster: "Find a master for installation", shopProducts: "products", shopCategories: "categories",
     shopDelivery: "Delivery", shopCart: "Cart",
@@ -1160,7 +1163,7 @@ const translations: Record<Language, Record<string, string>> = {
     shopInstallFrom: "Installation from", shopMasterInstall: "Master installation",
     shopBuyWithInstallBtn: "Buy with installation", shopRecommended: "Recommended",
     shopRecommendedSubtitle: "Best products by rating and reviews", shopAllProducts: "All products",
-    shopTrustTitle: "Why buy from Master Chas?",
+    shopTrustTitle: "Why buy from Master TJ?",
     shopTrustSubtitle: "We combine a shop and master services — all in one place",
     shopTrustMasters: "Verified Masters", shopTrustMastersDesc: "All masters are verified",
     shopTrustGuarantee: "Work Guarantee", shopTrustGuaranteeDesc: "Guarantee on all services",
@@ -1249,8 +1252,8 @@ const translations: Record<Language, Record<string, string>> = {
     authEmailNotConfirmed: "Email not confirmed. Check your inbox.",
     authPasswordMinLength: "Password must be at least 6 characters",
     authYourName: "Your name", authPhone: "Phone",
-    aboutPageTitle: "About Master Chas",
-    aboutPageDesc: "Master Chas is a modern home service marketplace in Dushanbe that helps quickly find a reliable master for any household task.",
+    aboutPageTitle: "About Master TJ",
+    aboutPageDesc: "Master TJ is a modern home service marketplace in Dushanbe that helps quickly find a reliable master for any household task.",
     aboutMission: "Our Mission", aboutMissionDesc: "Make home services in Dushanbe fast, safe, transparent and accessible to everyone.",
     aboutWhyChoose: "Why Choose Us",
     aboutVerifiedMasters: "Verified Masters", aboutVerifiedMastersDesc: "All masters pass strict document and skill verification.",
@@ -1418,3 +1421,4 @@ export const useLanguage = () => {
   }
   return context;
 };
+

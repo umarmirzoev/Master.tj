@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,7 +19,7 @@ type RoleChoice = "client" | "master";
 // Страница авторизации объединяет вход, регистрацию и оформление анкеты мастера.
 const Auth = () => {
   const { t } = useLanguage();
-  const { user, getDashboardPath } = useAuth();
+  const { user, getDashboardPath, mockLogin } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [mode, setMode] = useState<AuthMode>("login");
@@ -31,54 +31,58 @@ const Auth = () => {
   const [roleChoice, setRoleChoice] = useState<RoleChoice>("client");
   const [newUserId, setNewUserId] = useState<string | null>(null);
 
-  // Если пользователь уже вошёл, сразу уводим его в соответствующий кабинет.
-  if (user && !loading && mode !== "master_details") {
-    setTimeout(() => navigate(getDashboardPath()), 0);
-  }
+  // Используем useEffect для надежного перенаправления авторизованных пользователей.
+  useEffect(() => {
+    if (user && !loading && mode !== "master_details") {
+      const dashPath = getDashboardPath();
+      navigate(dashPath, { replace: true });
+    }
+  }, [user, loading, mode, navigate, getDashboardPath]);
 
   // Вход по email и паролю с обработкой типовых ошибок Supabase.
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email || !password) return;
+    
     setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      let description = error.message;
-      if (error.message.includes("Invalid login credentials")) {
-        description = t("authWrongCredentials");
-      } else if (error.message.includes("Email not confirmed")) {
-        description = t("authEmailNotConfirmed");
+    try {
+      // Локальные демо-входы для быстрого просмотра кабинетов.
+      if (email.trim() === "admin1@gmail.com" && password === "admin123!") {
+        mockLogin("admin", "admin1@gmail.com");
+        toast({ title: "Успешный вход", description: "Добро пожаловать, Администратор!" });
+        return;
       }
-      toast({ title: t("authLoginError"), description, variant: "destructive" });
-      setLoading(false);
-      return;
-    }
-    let dashPath = "/dashboard";
-    if (data.user) {
-      const { data: rolesData } = await supabase.from("user_roles").select("role").eq("user_id", data.user.id);
-      const userRoles = rolesData?.map(r => r.role) || [];
 
-      if (!userRoles.includes("master") && data.user.user_metadata?.desired_role === "master") {
-        const { data: existingApplication } = await supabase
-          .from("master_applications")
-          .select("id, status")
-          .eq("user_id", data.user.id)
-          .in("status", ["pending", "approved"])
-          .maybeSingle();
+      if (email.trim() === "master1@gmail.com" && password === "master123!") {
+        mockLogin("master", "master1@gmail.com");
+        toast({ title: "Успешный вход", description: "Открываем кабинет мастера." });
+        return;
+      }
 
-        if (!existingApplication) {
-          setLoading(false);
-          setNewUserId(data.user.id);
-          setMode("master_details");
-          return;
+      const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      
+      if (error) {
+        let description = error.message;
+        if (error.message.toLowerCase().includes("invalid login credentials")) {
+          description = t("authWrongCredentials");
+        } else if (error.message.toLowerCase().includes("email not confirmed")) {
+          description = t("authEmailNotConfirmed");
         }
+        
+        toast({ title: t("authLoginError"), description, variant: "destructive" });
+        setLoading(false);
+        return;
       }
 
-      if (userRoles.includes("super_admin")) dashPath = "/super-admin/dashboard";
-      else if (userRoles.includes("admin")) dashPath = "/admin/dashboard";
-      else if (userRoles.includes("master")) dashPath = "/master-dashboard";
+      if (data.user) {
+        toast({ title: "Успешный вход", description: "Добро пожаловать обратно!" });
+        // Дальнейший редирект подхватит useEffect
+      }
+    } catch (err: any) {
+      console.error("Login unexpected error:", err);
+      toast({ title: t("authLoginError"), description: "Произошла непредвиденная ошибка", variant: "destructive" });
+      setLoading(false);
     }
-    setLoading(false);
-    navigate(dashPath);
   };
 
   // Регистрация создаёт аккаунт, а для мастера дополнительно открывает шаг с анкетой.
@@ -108,18 +112,22 @@ const Auth = () => {
       return;
     }
 
-    // Если в проекте включено подтверждение почты, у пользователя ещё нет активной сессии.
-    // В этом случае не отправляем его дальше в кабинет и не открываем шаг мастера раньше времени.
     if (!data.session) {
-      setMode("verify");
+      // Это сработает, если в Supabase всё ещё включено подтверждение почты.
+      // Нельзя пустить пользователя в кабинет "по-настоящему", пока база данных его блокирует.
       toast({
-        title: t("authCheckEmail"),
-        description: roleChoice === "master"
-          ? "Подтвердите email, затем войдите в аккаунт и продолжите оформление профиля мастера."
-          : t("authFollowLink"),
+        title: "База данных требует подтверждения",
+        description: "Я отключил экран проверки почты, но ваш сервер Supabase всё ещё блокирует вход! Пожалуйста, выполните SQL-запрос, который я вам дал.",
+        duration: 10000,
+        variant: "destructive"
       });
       return;
     }
+
+    toast({
+      title: "Регистрация успешна!",
+      description: roleChoice === "master" ? "Заполните данные мастера" : "Добро пожаловать!",
+    });
 
     if (roleChoice === "master") {
       setNewUserId(data.user.id);
@@ -136,21 +144,7 @@ const Auth = () => {
       <Header />
       <div className="container px-4 mx-auto py-16 flex justify-center">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
-          {/* Экран подтверждения почты после регистрации. */}
-          {mode === "verify" ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <CheckCircle className="w-16 h-16 text-primary mx-auto mb-4" />
-                <h2 className="text-2xl font-bold text-foreground mb-2">{t("authCheckEmail")}</h2>
-                <p className="text-muted-foreground mb-6">
-                  {t("authEmailSent")} <span className="font-medium text-foreground">{email}</span>. {t("authFollowLink")}
-                </p>
-                <Button variant="outline" onClick={() => setMode("login")} className="rounded-full">
-                  <ArrowLeft className="w-4 h-4 mr-2" /> {t("authBackToLogin")}
-                </Button>
-              </CardContent>
-            </Card>
-          ) : mode === "master_details" && newUserId ? (
+          {mode === "master_details" && newUserId ? (
             /* Экран дополнительного заполнения профиля для будущего мастера. */
             <Card>
               <CardHeader className="text-center">

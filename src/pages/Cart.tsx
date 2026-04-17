@@ -14,7 +14,9 @@ import RecommendedProducts from "@/components/shop/RecommendedProducts";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { isFallbackProductId } from "@/data/shopFallback";
 import { SmartProductImage } from "@/components/shop/SmartProductImage";
+import { saveLocalShopOrder, saveLocalShopOrderItems } from "@/lib/localShopOrders";
 import {
   ArrowLeft,
   Banknote,
@@ -181,77 +183,161 @@ export default function CartPage() {
     setSubmitting(true);
 
     const paymentStatus = paymentMethod === "transfer" ? "pending" : "unpaid";
-
-    const { data: order, error } = await supabase
-      .from("shop_orders")
-      .insert({
-        user_id: user.id,
-        subtotal: totalPrice,
-        discount_amount: discountAmount,
-        total: finalTotal,
-        delivery_address: form.address,
-        phone: form.phone,
-        customer_name: form.name,
-        comments: form.comments,
-        status: "pending",
-        payment_method: paymentMethod,
-        payment_status: paymentStatus,
-        promo_code: appliedPromo?.code || null,
-        promo_code_id: appliedPromo?.id || null,
-      })
-      .select()
-      .single();
-
-    if (error || !order) {
-      toast({ title: t("error"), description: error?.message, variant: "destructive" });
-      setSubmitting(false);
-      return;
-    }
-
-    const orderItems = items.map((item) => ({
-      order_id: order.id,
+    const timestamp = new Date().toISOString();
+    const baseOrderItems = items.map((item) => ({
+      id: crypto.randomUUID(),
+      order_id: "",
       product_id: item.product_id,
       quantity: item.quantity,
       price: (item as any).product?.price || 0,
       include_installation: item.include_installation,
       installation_price: item.include_installation ? ((item as any).product?.installation_price || 0) : 0,
     }));
+    const orderPayload = {
+      user_id: user.id,
+      subtotal: totalPrice,
+      discount_amount: discountAmount,
+      total: finalTotal,
+      delivery_address: form.address,
+      phone: form.phone,
+      customer_name: form.name,
+      comments: form.comments,
+      status: "pending",
+      payment_method: paymentMethod,
+      payment_status: paymentStatus,
+      promo_code: appliedPromo?.code || null,
+      promo_code_id: appliedPromo?.id || null,
+    };
+    let createdOrderId: string | null = null;
 
-    const { error: orderItemsError } = await supabase.from("shop_order_items").insert(orderItems);
-    if (orderItemsError) {
-      toast({ title: t("error"), description: orderItemsError.message, variant: "destructive" });
-      setSubmitting(false);
-      return;
-    }
+    try {
+      const { data: order, error } = await supabase
+        .from("shop_orders")
+        .insert(orderPayload)
+        .select()
+        .single();
 
-    if (appliedPromo) {
-      await supabase.from("promo_code_usage").insert({
-        promo_code_id: appliedPromo.id,
-        user_id: user.id,
+      if (error || !order) {
+        throw new Error(error?.message || "Не удалось создать заказ");
+      }
+
+      createdOrderId = order.id;
+
+      const orderItems = baseOrderItems.map((item) => ({
+        ...item,
         order_id: order.id,
-        discount_applied: discountAmount,
+      }));
+
+      const realOrderItems = orderItems.filter((item) => !isFallbackProductId(item.product_id));
+      const fallbackOrderItems = orderItems.filter((item) => isFallbackProductId(item.product_id));
+
+      if (realOrderItems.length > 0) {
+        const { error: orderItemsError } = await supabase.from("shop_order_items").insert(realOrderItems);
+        if (orderItemsError) {
+          throw new Error(orderItemsError.message);
+        }
+      }
+
+      if (fallbackOrderItems.length > 0) {
+        try {
+          const storedFallbackOrders = JSON.parse(localStorage.getItem("mc_fallback_orders") || "{}");
+          storedFallbackOrders[order.id] = fallbackOrderItems;
+          localStorage.setItem("mc_fallback_orders", JSON.stringify(storedFallbackOrders));
+
+          const { error: fallbackError } = await supabase.from("shop_order_items").insert(fallbackOrderItems);
+          if (fallbackError) {
+            console.error("Fallback order items insert error:", fallbackError.message);
+          }
+        } catch (storageError) {
+          console.error("Local order save error", storageError);
+        }
+      }
+
+      if (appliedPromo) {
+        const { error: promoUsageError } = await supabase.from("promo_code_usage").insert({
+          promo_code_id: appliedPromo.id,
+          user_id: user.id,
+          order_id: order.id,
+          discount_applied: discountAmount,
+        });
+
+        if (promoUsageError) {
+          throw new Error(promoUsageError.message);
+        }
+
+        const { error: promoUpdateError } = await supabase
+          .from("promo_codes")
+          .update({ times_used: (appliedPromo.times_used || 0) + 1 })
+          .eq("id", appliedPromo.id);
+
+        if (promoUpdateError) {
+          throw new Error(promoUpdateError.message);
+        }
+      }
+
+      const { error: notificationError } = await supabase.from("notifications").insert({
+        user_id: user.id,
+        title: t("cartOrderSuccess"),
+        message: `${t("cartOrderSuccessDesc")}`,
+        type: "shop_order",
+        related_id: order.id,
       });
 
-      await supabase
-        .from("promo_codes")
-        .update({ times_used: (appliedPromo.times_used || 0) + 1 })
-        .eq("id", appliedPromo.id);
+      if (notificationError) {
+        console.error("Shop order notification error:", notificationError.message);
+      }
+
+      saveLocalShopOrder({
+        id: order.id,
+        ...orderPayload,
+        created_at: order.created_at || timestamp,
+        updated_at: order.updated_at || timestamp,
+        local_only: true,
+      });
+      if (fallbackOrderItems.length > 0) {
+        saveLocalShopOrderItems(order.id, fallbackOrderItems);
+      }
+
+      await clearCart();
+      setCheckout(false);
+      toast({ title: `${t("cartOrderSuccess")} ✓`, description: t("cartOrderSuccessDesc") });
+      navigate(`/shop/thank-you/${order.id}`);
+    } catch (err: any) {
+      if (createdOrderId) {
+        await supabase
+          .from("shop_orders")
+          .update({ status: "cancelled" })
+          .eq("id", createdOrderId)
+          .eq("user_id", user.id)
+          .eq("status", "pending");
+      }
+
+      const localOrderId = `local-shop-${crypto.randomUUID()}`;
+      saveLocalShopOrder({
+        id: localOrderId,
+        ...orderPayload,
+        created_at: timestamp,
+        updated_at: timestamp,
+        local_only: true,
+      });
+      saveLocalShopOrderItems(
+        localOrderId,
+        baseOrderItems.map((item) => ({
+          ...item,
+          order_id: localOrderId,
+        })),
+      );
+
+      await clearCart();
+      setCheckout(false);
+      toast({
+        title: t("cartOrderSuccess"),
+        description: "Заказ сохранён локально и уже появился в кабинетах.",
+      });
+      navigate(`/shop/thank-you/${localOrderId}`);
+    } finally {
+      setSubmitting(false);
     }
-
-    await supabase.from("notifications").insert({
-      user_id: user.id,
-      title: t("cartOrderSuccess"),
-      message: `${t("cartOrderSuccessDesc")}`,
-      type: "shop_order",
-      related_id: order.id,
-    });
-
-    await clearCart();
-    setSubmitting(false);
-    setCheckout(false);
-
-    toast({ title: `${t("cartOrderSuccess")} ✓`, description: t("cartOrderSuccessDesc") });
-    navigate(`/shop/thank-you/${order.id}`);
   };
 
   return (

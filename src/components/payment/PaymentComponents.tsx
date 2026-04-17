@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import {
   CreditCard, Banknote, Smartphone, CheckCircle, XCircle,
@@ -311,6 +312,7 @@ interface ReceiptDialogProps {
 }
 
 export function ReceiptDialog({ order, masterName, clientName, open, onOpenChange }: ReceiptDialogProps) {
+  const { t } = useLanguage();
   if (!order) return null;
 
   const total = order.total_amount || order.budget || 0;
@@ -325,7 +327,7 @@ export function ReceiptDialog({ order, masterName, clientName, open, onOpenChang
               <FileText className="w-6 h-6 text-primary" />
             </div>
             <h3 className="text-lg font-bold">Чек об оплате</h3>
-            <p className="text-xs text-muted-foreground">Мастер Час</p>
+            <p className="text-xs text-muted-foreground">{t("brandName")}</p>
           </div>
 
           <Separator />

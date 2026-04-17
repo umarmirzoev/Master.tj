@@ -63,7 +63,7 @@ const CROSS_SELL_MAP: Record<string, string[]> = {
 };
 
 function ProductCard({ product, onAddToCart, t }: { product: any; onAddToCart: (id: string) => void; t: (k: string) => string }) {
-  const canAddToCart = !isFallbackProductId(product.id);
+  const canAddToCart = true;
   const stockCount = product.stock_qty ?? product.stock_quantity ?? product.quantity ?? (product.in_stock ? Math.max(3, ((product.reviews_count || 0) % 9) + 2) : 0);
   const quickLink = `https://wa.me/992979117007?text=${encodeURIComponent(`Здравствуйте! Интересует товар: ${product.name}`)}`;
   return (
@@ -409,10 +409,7 @@ export default function ProductDetail() {
       toast({ title: "Поставьте оценку товару", variant: "destructive" });
       return;
     }
-    if (isFallbackProductId(product.id)) {
-      toast({ title: "Для резервных товаров отзыв пока недоступен", variant: "destructive" });
-      return;
-    }
+    // Demo mode restriction removed: we now allow adding fallback items to cart.
 
     setSubmittingReview(true);
     const payload = {
@@ -707,7 +704,7 @@ export default function ProductDetail() {
                 size="lg"
                 className="flex-1 rounded-full gap-2"
                 onClick={() => addToCart(product.id, withInstall)}
-                disabled={!product.in_stock || isFallbackProductId(product.id)}
+                disabled={!product.in_stock}
               >
                 <ShoppingCart className="w-5 h-5" /> {t("shopAddToCart")}
               </Button>
@@ -716,7 +713,7 @@ export default function ProductDetail() {
                 variant="outline"
                 className="flex-1 rounded-full"
                 onClick={handleBuyNow}
-                disabled={!product.in_stock || isFallbackProductId(product.id)}
+                disabled={!product.in_stock}
               >
                 {t("shopBuyNow")}
               </Button>
@@ -912,7 +909,7 @@ export default function ProductDetail() {
             <FavoriteButton itemType="product" itemId={product.id} size="default" />
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Button className="rounded-full" onClick={() => addToCart(product.id, withInstall)} disabled={!product.in_stock || isFallbackProductId(product.id)}>
+            <Button className="rounded-full" onClick={() => addToCart(product.id, withInstall)} disabled={!product.in_stock}>
               {t("shopAddToCart")}
             </Button>
             <Button variant="outline" className="rounded-full" onClick={handleQuickBuyOpen}>

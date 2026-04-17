@@ -49,7 +49,7 @@ export default function MasterDashboardLayout({
             <Wrench className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-base font-bold text-white block leading-tight">Мастер Час</span>
+            <span className="text-base font-bold text-white block leading-tight">{t("brandName")}</span>
             <span className="text-[11px] text-emerald-400/80 font-medium">Панель мастера</span>
           </div>
         </Link>

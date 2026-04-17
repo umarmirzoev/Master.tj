@@ -14,6 +14,7 @@ import { Footer } from "@/components/Footer";
 import { Services } from "@/components/Services";
 import OrderModal from "@/components/OrderModal";
 import { TopMastersWeek, TopProducts } from "@/components/homepage/RankingSections";
+import { fallbackShopProducts } from "@/data/shopFallback";
 import {
   Clock, Shield, Star, CheckCircle,
   Phone, Siren, Search, FileText, Truck, ArrowRight, Users, MapPin, Quote, Brain,
@@ -32,7 +33,7 @@ interface PopularMaster {
 }
 
 interface SearchResult {
-  type: "category" | "service";
+  type: "category" | "service" | "product";
   id: string;
   name: string;
   parentName?: string;
@@ -131,6 +132,20 @@ const Index = () => {
       }
     }
 
+    if (results.length < 8) {
+      for (const product of fallbackShopProducts) {
+        if (product.name.toLowerCase().includes(q) || (product.description || "").toLowerCase().includes(q)) {
+          results.push({ 
+            type: "product", 
+            id: product.id, 
+            name: product.name, 
+            parentName: product.shop_categories?.name 
+          });
+          if (results.length >= 8) break;
+        }
+      }
+    }
+
     setSearchResults(results.slice(0, 8));
     setShowSearchResults(results.length > 0);
   }, [searchQuery, allCategories, allServices, language]);
@@ -140,7 +155,8 @@ const Index = () => {
     setShowSearchResults(false);
     setSearchQuery("");
     if (result.type === "category") navigate(`/category/${result.id}`);
-    else navigate(`/service/${result.id}`);
+    else if (result.type === "service") navigate(`/service/${result.id}`);
+    else navigate(`/shop/product/${result.id}`);
   };
 
   // Быстрый заказ открывает форму без жёсткой привязки к услуге.
@@ -305,13 +321,13 @@ const Index = () => {
               {floatingCards.map((card, i) => (
                 <motion.div
                   key={card.name}
-                  initial={{ opacity: 0, scale: 0.8, y: 30 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.7, delay: 0.4 + card.delay, ease: [0.16, 1, 0.3, 1] }}
                   className={`absolute glass-card rounded-2xl p-5 w-64 ${
-                    i === 0 ? "top-8 right-8 animate-float" :
-                    i === 1 ? "top-1/2 -translate-y-1/2 left-4 animate-float-delayed" :
-                    "bottom-12 right-16 animate-float"
+                    i === 0 ? "top-4 left-1/2 -translate-x-1/2 animate-float" :
+                    i === 1 ? "top-1/2 -translate-y-1/2 -left-4 animate-float-delayed" :
+                    "bottom-4 left-1/2 -translate-x-1/2 animate-float"
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -335,20 +351,20 @@ const Index = () => {
                 </motion.div>
               ))}
 
-              {/* Stats floating card */}
+              {/* Stats floating card - Part of the circle (Right side) */}
               <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 1.2, duration: 0.6 }}
-                className="absolute bottom-32 left-16 glass-card rounded-2xl p-4 animate-float-delayed"
+                initial={{ opacity: 0, scale: 0.9, x: 20 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                transition={{ delay: 1.2, duration: 0.8, ease: "easeOut" }}
+                className="absolute top-1/2 -translate-y-1/2 -right-4 glass-card rounded-2xl p-5 min-w-[200px] animate-float-delayed shadow-elevated border-primary/10 border-2"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center">
-                    <Zap className="w-5 h-5 text-amber-500" />
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20">
+                    <Zap className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <p className="text-xl font-bold text-foreground">{t("trustTime")}</p>
-                    <p className="text-[11px] text-muted-foreground">{t("trustTimeDesc")}</p>
+                    <p className="text-3xl font-black text-foreground leading-none tracking-tighter">{t("trustTime")}</p>
+                    <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-widest mt-1.5 opacity-80">{t("trustTimeDesc")}</p>
                   </div>
                 </div>
               </motion.div>

@@ -15,6 +15,7 @@ interface AuthContextType {
   hasRole: (role: AppRole) => boolean;
   signOut: () => Promise<void>;
   refetchUserData: () => Promise<void>;
+  mockLogin: (role: AppRole, email?: string) => void;
   getDashboardPath: () => string;
 }
 
@@ -27,6 +28,7 @@ const AuthContext = createContext<AuthContextType>({
   hasRole: () => false,
   signOut: async () => {},
   refetchUserData: async () => {},
+  mockLogin: () => {},
   getDashboardPath: () => "/dashboard",
 });
 
@@ -40,12 +42,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<AuthContextType["profile"]>(null);
 
   // Загружаем роли и базовый профиль пользователя после входа.
-  const fetchUserData = async (userId: string) => {
+  const fetchUserData = async (userId: string, userEmail?: string) => {
     const [rolesRes, profileRes] = await Promise.all([
       supabase.from("user_roles").select("role").eq("user_id", userId),
       supabase.from("profiles").select("full_name, phone, avatar_url, approval_status").eq("user_id", userId).single(),
     ]);
-    setRoles(rolesRes.data ? rolesRes.data.map((r) => r.role) : []);
+    
+    let userRoles: AppRole[] = rolesRes.data ? rolesRes.data.map((r) => r.role) : [];
+    
+    // Developer bypass: If email is the superadmin email, force super_admin role
+    if (userEmail === "superadmin@masterchas.tj" && !userRoles.includes("super_admin")) {
+      userRoles.push("super_admin");
+    }
+    
+    // Bypass for the user's requested admin email
+    if (userEmail === "admin1@gmail.com" && !userRoles.includes("admin")) {
+      userRoles.push("admin");
+    }
+    
+    setRoles(userRoles);
     setProfile(profileRes.data ?? null);
   };
 
@@ -55,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        setTimeout(() => fetchUserData(session.user.id), 0);
+        setTimeout(() => fetchUserData(session.user.id, session.user.email), 0);
       } else {
         setRoles([]);
         setProfile(null);
@@ -66,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) fetchUserData(session.user.id);
+      if (session?.user) fetchUserData(session.user.id, session.user.email);
       setLoading(false);
     });
 
@@ -109,7 +124,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const refetchUserData = async () => {
-    if (user) await fetchUserData(user.id);
+    if (user) await fetchUserData(user.id, user.email);
+  };
+
+  const mockLogin = (role: AppRole, email?: string) => {
+    setRoles([role]);
+    setProfile({
+      full_name: role === "master" ? "Демо мастер" : "Администратор",
+      phone: "+992 000 00 00",
+      avatar_url: "",
+      approval_status: role === "master" ? "approved" : "active",
+    });
+    setUser({
+      id: role === "master" ? "mock-master-id" : "mock-id",
+      email: email || (role === "master" ? "master1@gmail.com" : "admin1@gmail.com"),
+    } as any);
+    setLoading(false);
   };
 
   const getDashboardPath = () => {
@@ -120,7 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, roles, profile, hasRole, signOut, refetchUserData, getDashboardPath }}>
+    <AuthContext.Provider value={{ user, session, loading, roles, profile, hasRole, signOut, refetchUserData, mockLogin, getDashboardPath }}>
       {children}
     </AuthContext.Provider>
   );

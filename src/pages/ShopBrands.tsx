@@ -145,7 +145,7 @@ export default function ShopBrands() {
                       <Button
                         className="rounded-full"
                         onClick={() => addToCart(product.id)}
-                        disabled={!product.in_stock || isFallbackProductId(product.id)}
+                        disabled={!product.in_stock}
                       >
                         <ShoppingCart className="h-4 w-4" />
                       </Button>

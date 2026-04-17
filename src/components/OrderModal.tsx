@@ -55,7 +55,7 @@ export default function OrderModal({ isOpen, onClose, category, initialServiceNa
     }
 
     setSubmitting(true);
-    const { error } = await supabase.from("orders").insert({
+    const { data: createdOrders, error } = await supabase.from("orders").insert({
       client_id: user.id,
       category_id: categoryId || null,
       service_id: serviceId || null,
@@ -64,13 +64,35 @@ export default function OrderModal({ isOpen, onClose, category, initialServiceNa
       phone,
       preferred_time: preferredTime || null,
       status: "new",
-    });
+    }).select("id");
 
     setSubmitting(false);
 
     if (error) {
       toast({ title: "Ошибка", description: error.message, variant: "destructive" });
       return;
+    }
+
+    const createdOrder = createdOrders?.[0];
+    if (createdOrder) {
+      const { data: admins } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .in("role", ["admin", "super_admin"]);
+
+      if (admins?.length) {
+        await Promise.all(
+          admins.map((admin) =>
+            supabase.from("notifications").insert({
+              user_id: admin.user_id,
+              title: "Новый заказ",
+              message: `${initialServiceName || "Новая заявка"} • ${district ? `${t(district)}, ` : ""}${address}`,
+              type: "order_created",
+              related_id: createdOrder.id,
+            })
+          )
+        );
+      }
     }
 
     setSubmitted(true);

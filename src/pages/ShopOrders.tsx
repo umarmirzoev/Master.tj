@@ -9,6 +9,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { SmartProductImage } from "@/components/shop/SmartProductImage";
+import { getFallbackProductById, isFallbackProductId } from "@/data/shopFallback";
+import {
+  getLocalShopOrderById,
+  getLocalShopOrderItemsMap,
+  getLocalShopOrdersByUser,
+  mergeShopOrders,
+  updateLocalShopOrderStatus,
+} from "@/lib/localShopOrders";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -110,7 +118,10 @@ export default function ShopOrders() {
       return;
     }
 
-    const loadedOrders = (ordersData || []) as ShopOrder[];
+    const loadedOrders = mergeShopOrders(
+      (ordersData || []) as ShopOrder[],
+      getLocalShopOrdersByUser(user.id) as ShopOrder[],
+    );
     setOrders(loadedOrders);
 
     if (loadedOrders.length === 0) {
@@ -127,21 +138,33 @@ export default function ShopOrders() {
       .in("order_id", orderIds);
 
     const loadedItems = (itemsData || []) as ShopOrderItem[];
-    setOrderItems(loadedItems);
+    
+    const storedItems = getLocalShopOrderItemsMap();
+    const fallbackItems = orderIds.flatMap((id) => storedItems[id] || []);
 
-    const productIds = [...new Set(loadedItems.map((item) => item.product_id))];
-    if (productIds.length > 0) {
+    const allItems = [...loadedItems, ...fallbackItems];
+    setOrderItems(allItems);
+
+    const productIds = [...new Set(allItems.map((item) => item.product_id))];
+    const realProductIds = productIds.filter(pid => !isFallbackProductId(pid));
+    
+    let productsMap: Record<string, ShopOrderProduct> = {};
+
+    if (realProductIds.length > 0) {
       const { data: productsData } = await supabase
         .from("shop_products")
         .select("id, name, image_url, images, price, category_id")
-        .in("id", productIds);
+        .in("id", realProductIds);
 
-      setProducts(
-        Object.fromEntries(((productsData || []) as ShopOrderProduct[]).map((product) => [product.id, product])),
-      );
-    } else {
-      setProducts({});
+      productsMap = Object.fromEntries(((productsData || []) as ShopOrderProduct[]).map((product) => [product.id, product]));
     }
+
+    productIds.filter(pid => isFallbackProductId(pid)).forEach(pid => {
+      const fbProduct = getFallbackProductById(pid);
+      if (fbProduct) productsMap[pid] = fbProduct as any;
+    });
+
+    setProducts(productsMap);
 
     setLoading(false);
   };
@@ -155,6 +178,17 @@ export default function ShopOrders() {
     loadOrders();
   }, [navigate, user]);
 
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === "mc_local_shop_orders" || event.key === "mc_fallback_orders") {
+        void loadOrders();
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [user]);
+
   const itemsByOrder = useMemo(
     () =>
       orderItems.reduce<Record<string, ShopOrderItem[]>>((acc, item) => {
@@ -167,12 +201,20 @@ export default function ShopOrders() {
 
   const cancelOrder = async (orderId: string) => {
     setCancelId(orderId);
-    const { error } = await supabase
-      .from("shop_orders")
-      .update({ status: "cancelled" })
-      .eq("id", orderId)
-      .eq("user_id", user?.id)
-      .eq("status", "pending");
+    const localOrder = getLocalShopOrderById(orderId);
+    let error = null;
+
+    if (localOrder) {
+      updateLocalShopOrderStatus(orderId, "cancelled");
+    } else {
+      const result = await supabase
+        .from("shop_orders")
+        .update({ status: "cancelled" })
+        .eq("id", orderId)
+        .eq("user_id", user?.id)
+        .eq("status", "pending");
+      error = result.error;
+    }
 
     setCancelId(null);
 
