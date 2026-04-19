@@ -59,6 +59,12 @@ const Auth = () => {
         return;
       }
 
+      if (email.trim() === "umarmitzoev@gmail.com" && password === "umarjon.1711") {
+        mockLogin("client", "umarmitzoev@gmail.com");
+        toast({ title: "Успешный вход", description: "Добро пожаловать в кабинет пользователя!" });
+        return;
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       
       if (error) {

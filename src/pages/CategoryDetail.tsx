@@ -8,7 +8,8 @@ import { Footer } from "@/components/Footer";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, Wrench, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, Wrench, Users, ShoppingCart } from "lucide-react";
+import OrderModal from "@/components/OrderModal";
 
 interface ServiceCategory {
   id: string;
@@ -41,6 +42,8 @@ export default function CategoryDetail() {
   const [category, setCategory] = useState<ServiceCategory | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
+  const [orderModalOpen, setOrderModalOpen] = useState(false);
+  const [selectedService, setSelectedService] = useState<{id: string, name: string} | null>(null);
 
   // Загружаем данные категории и список услуг, относящихся к ней.
   useEffect(() => {
@@ -119,10 +122,11 @@ export default function CategoryDetail() {
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: Math.min(index * 0.05, 0.3) }}
+                className="relative group"
               >
-                <Link to={`/service/${service.id}`}>
-                  <Card className="group hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 cursor-pointer border-border/50">
-                    <CardContent className="p-4 sm:p-5">
+                <Card className="hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 border-border/50">
+                  <CardContent className="p-4 sm:p-5">
+                    <Link to={`/service/${service.id}`} className="block">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
@@ -144,19 +148,45 @@ export default function CategoryDetail() {
                           </Button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 mt-3 text-xs text-muted-foreground">
+                    </Link>
+                    
+                    <div className="flex items-center justify-between mt-4 pt-3 border-t border-border/50">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <Users className="w-3.5 h-3.5" />
-                        Посмотреть мастеров
+                        <Link to={`/service/${service.id}`} className="hover:text-primary">Посмотреть мастеров</Link>
                       </div>
-                    </CardContent>
-                  </Card>
-                </Link>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="rounded-full h-8 px-3 text-xs gap-1.5 hover:bg-primary hover:text-white border-primary/30 text-primary"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setSelectedService({ id: service.id, name: getName(service) });
+                          setOrderModalOpen(true);
+                        }}
+                      >
+                        <ShoppingCart className="w-3.5 h-3.5" />
+                        Заказать
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
       <Footer />
+      {selectedService && (
+        <OrderModal 
+          isOpen={orderModalOpen}
+          onClose={() => setOrderModalOpen(false)}
+          categoryId={id}
+          serviceId={selectedService.id}
+          initialServiceName={selectedService.name}
+          category={getName(category)}
+        />
+      )}
     </div>
   );
 }

@@ -129,14 +129,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const mockLogin = (role: AppRole, email?: string) => {
     setRoles([role]);
+    
+    let full_name = "Пользователь";
+    if (role === "master") full_name = "Демо мастер";
+    if (role === "admin") full_name = "Администратор";
+    if (role === "super_admin") full_name = "Супер Администратор";
+    
+    // Custom name for the requested user
+    if (email === "umarmitzoev@gmail.com") {
+      full_name = "Умар Мирзоев";
+    }
+
     setProfile({
-      full_name: role === "master" ? "Демо мастер" : "Администратор",
+      full_name,
       phone: "+992 000 00 00",
       avatar_url: "",
       approval_status: role === "master" ? "approved" : "active",
     });
     setUser({
-      id: role === "master" ? "mock-master-id" : "mock-id",
+      id: email === "umarmitzoev@gmail.com" ? "00000000-0000-0000-0000-000000000001" : (role === "master" ? "00000000-0000-0000-0000-000000000002" : "00000000-0000-0000-0000-000000000003"),
       email: email || (role === "master" ? "master1@gmail.com" : "admin1@gmail.com"),
     } as any);
     setLoading(false);

@@ -192,7 +192,7 @@ export default function ServiceDetail() {
   };
 
   // При открытии формы бронирования подставляем мастера и очищаем предыдущие значения формы.
-  const openBooking = (master: MasterListing) => {
+  const openBooking = (master: MasterListing | null) => {
     setSelectedMaster(master);
     setBookingOpen(true);
     setBookingDone(false);
@@ -271,6 +271,17 @@ export default function ServiceDetail() {
                       </span>
                     </div>
                   </div>
+                </div>
+                <div className="mt-6 flex flex-col sm:flex-row gap-3">
+                  <Button 
+                    onClick={() => openBooking(null)} 
+                    className="rounded-full px-8 h-12 text-base shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90"
+                  >
+                    Быстрый заказ услуги
+                  </Button>
+                  <Button variant="outline" className="rounded-full px-6 h-12" onClick={() => navigate("/categories")}>
+                    <ArrowLeft className="w-4 h-4 mr-2" /> Другие услуги
+                  </Button>
                 </div>
               </CardContent>
             </Card>
